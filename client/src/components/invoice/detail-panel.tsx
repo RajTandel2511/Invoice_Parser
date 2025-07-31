@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Save, Edit, RotateCcw } from "lucide-react";
+import { X, Save, Edit, RotateCcw, CheckCircle, AlertCircle, XCircle, Clock } from "lucide-react";
 import { type Invoice, insertInvoiceSchema } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -28,6 +28,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+
+const getStatusIcon = (status: string) => {
+  switch (status) {
+    case 'matched':
+      return <CheckCircle className="h-4 w-4 text-green-600" />;
+    case 'review_needed':
+      return <AlertCircle className="h-4 w-4 text-yellow-600" />;
+    case 'not_matched':
+      return <XCircle className="h-4 w-4 text-red-600" />;
+    case 'pending':
+      return <Clock className="h-4 w-4 text-gray-600" />;
+    default:
+      return <Clock className="h-4 w-4 text-gray-600" />;
+  }
+};
 
 interface DetailPanelProps {
   invoice: Invoice;
@@ -113,24 +128,24 @@ export default function DetailPanel({
     : 0;
 
   return (
-    <div className="w-1/2 border-l border-gray-200 bg-white overflow-y-auto">
-      <div className="p-6">
+    <div className="w-1/2 border-l border-border bg-white overflow-y-auto">
+      <div className="p-8">
         {/* Invoice Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">
+            <h2 className="text-2xl font-semibold text-foreground tracking-tight">
               {invoice.invoiceNumber}
             </h2>
-            <p className="text-gray-500">{invoice.vendorName}</p>
+            <p className="text-muted-foreground mt-1">{invoice.vendorName}</p>
           </div>
           <div className="flex items-center space-x-3">
             <span
-              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${statusInfo.color}`}
+              className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium ${statusInfo.color}`}
             >
-              <i className={`${statusInfo.icon} mr-2`}></i>
-              {statusInfo.label}
+              {getStatusIcon(invoice.status)}
+              <span className="ml-2">{statusInfo.label}</span>
             </span>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button variant="ghost" size="sm" onClick={onClose} className="rounded-xl">
               <X className="h-4 w-4" />
             </Button>
           </div>

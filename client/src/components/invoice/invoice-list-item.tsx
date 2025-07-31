@@ -61,47 +61,47 @@ export default function InvoiceListItem({
   return (
     <div
       onClick={onSelect}
-      className={`flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors ${
-        isSelected ? "border-l-4 brand-border-500 bg-blue-50" : ""
+      className={`flex items-center justify-between p-5 border rounded-xl hover:bg-muted/50 cursor-pointer transition-all duration-200 ${
+        isSelected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/30"
       }`}
     >
-      <div className="flex items-center space-x-3">
+      <div className="flex items-center space-x-4">
         <div
-          className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+          className={`w-12 h-12 rounded-xl flex items-center justify-center ${
             invoice.status === "matched"
               ? "bg-green-100"
               : invoice.status === "review_needed"
               ? "bg-yellow-100"
               : invoice.status === "not_matched"
               ? "bg-red-100"
-              : "bg-gray-100"
+              : "bg-muted"
           }`}
         >
           <FileText
-            className={`h-5 w-5 ${
+            className={`h-6 w-6 ${
               invoice.status === "matched"
                 ? "text-green-600"
                 : invoice.status === "review_needed"
                 ? "text-yellow-600"
                 : invoice.status === "not_matched"
                 ? "text-red-600"
-                : "text-gray-600"
+                : "text-muted-foreground"
             }`}
           />
         </div>
         <div>
-          <p className="font-medium text-gray-900">{invoice.invoiceNumber}</p>
-          <p className="text-sm text-gray-500">{invoice.vendorName}</p>
+          <p className="font-semibold text-foreground text-sm">{invoice.invoiceNumber}</p>
+          <p className="text-sm text-muted-foreground">{invoice.vendorName}</p>
         </div>
       </div>
       <div className="text-right">
-        <p className="font-medium text-gray-900">
+        <p className="font-semibold text-foreground text-sm">
           {formatCurrency(invoice.totalAmount)}
         </p>
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center justify-end space-x-2 mt-1">
           {getStatusIcon(invoice.status)}
           <span
-            className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}
+            className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(invoice.status)}`}
           >
             {getStatusLabel(invoice.status)}
           </span>

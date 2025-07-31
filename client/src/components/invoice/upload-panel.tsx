@@ -92,45 +92,48 @@ export default function UploadPanel({
   });
 
   return (
-    <div className="w-1/2 p-6 overflow-y-auto">
+    <div className="w-1/2 p-8 overflow-y-auto">
       {/* Upload Section */}
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Invoice</h2>
+      <Card className="mb-8 shadow-sm border-border">
+        <CardContent className="p-8">
+          <h2 className="text-xl font-semibold text-foreground mb-6">Upload Invoice</h2>
 
           {/* Drag and Drop Area */}
           <div
             {...getRootProps()}
-            className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+            className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 cursor-pointer ${
               isDragActive
-                ? "border-blue-400 bg-blue-50"
-                : "border-gray-300 hover:border-blue-400"
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-primary/50 hover:bg-muted/30"
             }`}
           >
             <input {...getInputProps()} />
-            <div className="mx-auto w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center mb-4">
-              <CloudUpload className="h-6 w-6 text-gray-400" />
+            <div className="mx-auto w-16 h-16 bg-muted rounded-xl flex items-center justify-center mb-6">
+              <CloudUpload className={`h-8 w-8 ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`} />
             </div>
-            <p className="text-gray-600 mb-2">
+            <p className="text-foreground mb-2 text-lg font-medium">
               {isDragActive
                 ? "Drop the file here..."
-                : "Drag and drop your invoice files here, or"}
+                : "Drag and drop your invoice files here"}
             </p>
             {!isDragActive && (
-              <button className="brand-text-500 font-medium hover:brand-text-600">
-                browse files
-              </button>
+              <div className="space-y-2">
+                <p className="text-muted-foreground">or</p>
+                <button className="text-primary font-medium hover:text-primary/80 transition-colors">
+                  browse files
+                </button>
+              </div>
             )}
-            <p className="text-xs text-gray-400 mt-2">
+            <p className="text-sm text-muted-foreground mt-4">
               Supports PDF, PNG, JPG (max 10MB)
             </p>
           </div>
 
           {/* Upload Progress */}
           {uploadProgress > 0 && (
-            <div className="mt-4">
-              <Progress value={uploadProgress} className="h-2" />
-              <p className="text-sm text-gray-600 mt-2">
+            <div className="mt-6">
+              <Progress value={uploadProgress} className="h-3" />
+              <p className="text-sm text-muted-foreground mt-3">
                 Uploading... {uploadProgress}%
               </p>
             </div>
@@ -139,9 +142,9 @@ export default function UploadPanel({
       </Card>
 
       {/* Recent Invoices */}
-      <Card>
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Invoices</h2>
+      <Card className="shadow-sm border-border">
+        <CardContent className="p-8">
+          <h2 className="text-xl font-semibold text-foreground mb-6">Recent Invoices</h2>
 
           {isLoading ? (
             <div className="space-y-3">

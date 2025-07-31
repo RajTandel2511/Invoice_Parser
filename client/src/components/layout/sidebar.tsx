@@ -10,32 +10,32 @@ const navigationItems = [
 
 export default function Sidebar() {
   return (
-    <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+    <aside className="w-72 bg-white border-r border-border flex flex-col shadow-sm">
       {/* Logo/Brand Section */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-8 border-b border-border">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 brand-bg-500 rounded-lg flex items-center justify-center">
-            <FileText className="h-4 w-4 text-white" />
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center shadow-sm">
+            <FileText className="h-5 w-5 text-primary-foreground" />
           </div>
-          <span className="text-xl font-semibold text-gray-900">InvoiceFlow</span>
+          <span className="text-xl font-semibold text-foreground">InvoiceFlow</span>
         </div>
       </div>
 
       {/* Navigation Menu */}
-      <nav className="flex-1 p-4">
-        <ul className="space-y-2">
+      <nav className="flex-1 p-6">
+        <ul className="space-y-1">
           {navigationItems.map((item) => (
             <li key={item.label}>
               <a
                 href={item.href}
-                className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
+                className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
                   item.active
-                    ? "brand-bg-50 brand-text-700 font-medium"
-                    : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                    ? "bg-primary/5 text-primary font-medium border border-primary/10"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
-                <item.icon className="h-5 w-5" />
-                <span>{item.label}</span>
+                <item.icon className={`h-5 w-5 ${item.active ? 'text-primary' : ''}`} />
+                <span className="text-sm">{item.label}</span>
               </a>
             </li>
           ))}
@@ -43,14 +43,14 @@ export default function Sidebar() {
       </nav>
 
       {/* User Section */}
-      <div className="p-4 border-t border-gray-200">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-            <span className="text-gray-600 text-sm font-medium">JD</span>
+      <div className="p-6 border-t border-border">
+        <div className="flex items-center space-x-3 p-3 rounded-xl bg-muted/30">
+          <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+            <span className="text-primary text-sm font-semibold">JD</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900">John Doe</p>
-            <p className="text-xs text-gray-500">Administrator</p>
+            <p className="text-sm font-medium text-foreground">John Doe</p>
+            <p className="text-xs text-muted-foreground">Administrator</p>
           </div>
         </div>
       </div>
