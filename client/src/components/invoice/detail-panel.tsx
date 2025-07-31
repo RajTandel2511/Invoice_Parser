@@ -32,15 +32,15 @@ import {
 const getStatusIcon = (status: string) => {
   switch (status) {
     case 'matched':
-      return <CheckCircle className="h-4 w-4 text-green-600" />;
+      return <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />;
     case 'review_needed':
-      return <AlertCircle className="h-4 w-4 text-yellow-600" />;
+      return <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />;
     case 'not_matched':
-      return <XCircle className="h-4 w-4 text-red-600" />;
+      return <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />;
     case 'pending':
-      return <Clock className="h-4 w-4 text-gray-600" />;
+      return <Clock className="h-4 w-4 text-muted-foreground" />;
     default:
-      return <Clock className="h-4 w-4 text-gray-600" />;
+      return <Clock className="h-4 w-4 text-muted-foreground" />;
   }
 };
 
@@ -128,7 +128,7 @@ export default function DetailPanel({
     : 0;
 
   return (
-    <div className="w-1/2 border-l border-border bg-white overflow-y-auto">
+    <div className="w-1/2 border-l border-border bg-background overflow-y-auto">
       <div className="p-8">
         {/* Invoice Header */}
         <div className="flex items-center justify-between mb-8">
@@ -392,7 +392,7 @@ export default function DetailPanel({
             />
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+            <div className="flex items-center justify-between pt-6 border-t border-border">
               <div className="flex items-center space-x-3">
                 {isEditing && (
                   <Button

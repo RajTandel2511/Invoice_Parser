@@ -11,15 +11,15 @@ interface InvoiceListItemProps {
 const getStatusIcon = (status: string) => {
   switch (status) {
     case 'matched':
-      return <CheckCircle className="h-4 w-4 text-green-600" />;
+      return <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />;
     case 'review_needed':
-      return <AlertCircle className="h-4 w-4 text-yellow-600" />;
+      return <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />;
     case 'not_matched':
-      return <XCircle className="h-4 w-4 text-red-600" />;
+      return <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />;
     case 'pending':
-      return <Clock className="h-4 w-4 text-gray-600" />;
+      return <Clock className="h-4 w-4 text-muted-foreground" />;
     default:
-      return <Clock className="h-4 w-4 text-gray-600" />;
+      return <Clock className="h-4 w-4 text-muted-foreground" />;
   }
 };
 
@@ -41,15 +41,15 @@ const getStatusLabel = (status: string) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'matched':
-      return 'bg-green-100 text-green-800';
+      return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400';
     case 'review_needed':
-      return 'bg-yellow-100 text-yellow-800';
+      return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400';
     case 'not_matched':
-      return 'bg-red-100 text-red-800';
+      return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400';
     case 'pending':
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-muted text-muted-foreground';
     default:
-      return 'bg-gray-100 text-gray-800';
+      return 'bg-muted text-muted-foreground';
   }
 };
 
@@ -69,22 +69,22 @@ export default function InvoiceListItem({
         <div
           className={`w-12 h-12 rounded-xl flex items-center justify-center ${
             invoice.status === "matched"
-              ? "bg-green-100"
+              ? "bg-green-100 dark:bg-green-900/30"
               : invoice.status === "review_needed"
-              ? "bg-yellow-100"
+              ? "bg-yellow-100 dark:bg-yellow-900/30"
               : invoice.status === "not_matched"
-              ? "bg-red-100"
+              ? "bg-red-100 dark:bg-red-900/30"
               : "bg-muted"
           }`}
         >
           <FileText
             className={`h-6 w-6 ${
               invoice.status === "matched"
-                ? "text-green-600"
+                ? "text-green-600 dark:text-green-400"
                 : invoice.status === "review_needed"
-                ? "text-yellow-600"
+                ? "text-yellow-600 dark:text-yellow-400"
                 : invoice.status === "not_matched"
-                ? "text-red-600"
+                ? "text-red-600 dark:text-red-400"
                 : "text-muted-foreground"
             }`}
           />

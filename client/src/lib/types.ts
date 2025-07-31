@@ -17,31 +17,31 @@ export const getStatusInfo = (status: InvoiceStatus): InvoiceStatusInfo => {
     case 'matched':
       return {
         label: 'Matched',
-        color: 'status-matched',
+        color: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400',
         icon: 'fas fa-check'
       };
     case 'review_needed':
       return {
         label: 'Review Needed',
-        color: 'status-review-needed',
+        color: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400',
         icon: 'fas fa-exclamation-triangle'
       };
     case 'not_matched':
       return {
         label: 'Not Matched',
-        color: 'status-not-matched',
+        color: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400',
         icon: 'fas fa-times'
       };
     case 'pending':
       return {
         label: 'Processing',
-        color: 'status-pending',
+        color: 'bg-muted text-muted-foreground',
         icon: 'fas fa-clock'
       };
     default:
       return {
         label: 'Unknown',
-        color: 'status-pending',
+        color: 'bg-muted text-muted-foreground',
         icon: 'fas fa-question'
       };
   }

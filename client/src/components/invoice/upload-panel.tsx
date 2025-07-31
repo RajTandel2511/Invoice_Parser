@@ -150,17 +150,17 @@ export default function UploadPanel({
             <div className="space-y-3">
               {[...Array(3)].map((_, i) => (
                 <div key={i} className="animate-pulse">
-                  <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                  <div className="flex items-center justify-between p-3 border border-border rounded-lg">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+                      <div className="w-10 h-10 bg-muted rounded-lg"></div>
                       <div>
-                        <div className="h-4 bg-gray-200 rounded w-24 mb-1"></div>
-                        <div className="h-3 bg-gray-200 rounded w-16"></div>
+                        <div className="h-4 bg-muted rounded w-24 mb-1"></div>
+                        <div className="h-3 bg-muted rounded w-16"></div>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="h-4 bg-gray-200 rounded w-16 mb-1"></div>
-                      <div className="h-3 bg-gray-200 rounded w-12"></div>
+                      <div className="h-4 bg-muted rounded w-16 mb-1"></div>
+                      <div className="h-3 bg-muted rounded w-12"></div>
                     </div>
                   </div>
                 </div>
