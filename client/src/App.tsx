@@ -4,15 +4,35 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Dashboard from "@/pages/dashboard";
+import Upload from "@/pages/upload";
+import Invoices from "@/pages/invoices";
+import Matching from "@/pages/matching";
+import Settings from "@/pages/settings";
 import NotFound from "@/pages/not-found";
+import Sidebar from "@/components/layout/sidebar";
+import Header from "@/components/layout/header";
 
 function Router() {
   return (
-    <Switch>
-      <Route path="/" component={Dashboard} />
-      <Route path="/dashboard" component={Dashboard} />
-      <Route component={NotFound} />
-    </Switch>
+    <div className="flex h-screen bg-background">
+      <Sidebar />
+      
+      <main className="flex-1 flex flex-col overflow-hidden">
+        <Header />
+        
+        <div className="flex-1 overflow-auto">
+          <Switch>
+            <Route path="/" component={Dashboard} />
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/upload" component={Upload} />
+            <Route path="/invoices" component={Invoices} />
+            <Route path="/matching" component={Matching} />
+            <Route path="/settings" component={Settings} />
+            <Route component={NotFound} />
+          </Switch>
+        </div>
+      </main>
+    </div>
   );
 }
 

@@ -1,14 +1,17 @@
 import { FileText, Upload, List, Link2, Settings, BarChart3 } from "lucide-react";
+import { Link, useLocation } from "wouter";
 
 const navigationItems = [
-  { icon: BarChart3, label: "Dashboard", href: "/", active: true },
-  { icon: Upload, label: "Upload Invoice", href: "/upload", active: false },
-  { icon: List, label: "Processed Invoices", href: "/invoices", active: false },
-  { icon: Link2, label: "PO Matching", href: "/matching", active: false },
-  { icon: Settings, label: "Settings", href: "/settings", active: false },
+  { icon: BarChart3, label: "Dashboard", href: "/" },
+  { icon: Upload, label: "Upload Invoice", href: "/upload" },
+  { icon: List, label: "Processed Invoices", href: "/invoices" },
+  { icon: Link2, label: "PO Matching", href: "/matching" },
+  { icon: Settings, label: "Settings", href: "/settings" },
 ];
 
 export default function Sidebar() {
+  const [location] = useLocation();
+
   return (
     <aside className="w-72 bg-white border-r border-border flex flex-col shadow-sm">
       {/* Logo/Brand Section */}
@@ -24,21 +27,24 @@ export default function Sidebar() {
       {/* Navigation Menu */}
       <nav className="flex-1 p-6">
         <ul className="space-y-1">
-          {navigationItems.map((item) => (
-            <li key={item.label}>
-              <a
-                href={item.href}
-                className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                  item.active
-                    ? "bg-primary/5 text-primary font-medium border border-primary/10"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
-              >
-                <item.icon className={`h-5 w-5 ${item.active ? 'text-primary' : ''}`} />
-                <span className="text-sm">{item.label}</span>
-              </a>
-            </li>
-          ))}
+          {navigationItems.map((item) => {
+            const isActive = location === item.href || (item.href === "/" && location === "/dashboard");
+            return (
+              <li key={item.label}>
+                <Link
+                  href={item.href}
+                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                    isActive
+                      ? "bg-primary/5 text-primary font-medium border border-primary/10"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  }`}
+                >
+                  <item.icon className={`h-5 w-5 ${isActive ? 'text-primary' : ''}`} />
+                  <span className="text-sm">{item.label}</span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 
