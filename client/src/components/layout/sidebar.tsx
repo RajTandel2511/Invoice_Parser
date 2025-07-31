@@ -13,7 +13,7 @@ export default function Sidebar() {
   const [location] = useLocation();
 
   return (
-    <aside className="w-72 bg-white border-r border-border flex flex-col shadow-sm">
+    <aside className="w-72 bg-background border-r border-border flex flex-col shadow-sm">
       {/* Logo/Brand Section */}
       <div className="p-8 border-b border-border">
         <div className="flex items-center space-x-3">

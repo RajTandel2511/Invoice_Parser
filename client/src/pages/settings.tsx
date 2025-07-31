@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Save, User, Bell, Database, Shield, Upload, Mail } from "lucide-react";
+import { Save, User, Bell, Database, Shield, Upload, Mail, Palette } from "lucide-react";
+import { useTheme } from "@/components/theme/theme-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function Settings() {
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState({
     // User Settings
     name: "John Doe",
@@ -66,6 +68,34 @@ export default function Settings() {
       </div>
 
       <div className="space-y-8">
+        {/* Appearance Settings */}
+        <Card className="shadow-sm border-border">
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Palette className="h-5 w-5" />
+              <span>Appearance</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="theme">Theme</Label>
+              <Select value={theme} onValueChange={(value: any) => setTheme(value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="light">Light</SelectItem>
+                  <SelectItem value="dark">Dark</SelectItem>
+                  <SelectItem value="system">System</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-sm text-muted-foreground">
+                Choose your preferred theme or use system settings
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* User Profile */}
         <Card className="shadow-sm border-border">
           <CardHeader>
