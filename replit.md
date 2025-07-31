@@ -8,6 +8,19 @@ This is a full-stack web application built for invoice processing and automated 
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes
+
+### Dark Mode Theme System Implementation (January 31, 2025)
+- Added complete dark/light mode theme system with automatic system preference detection
+- Implemented theme provider with localStorage persistence
+- Added theme toggle button in header with sun/moon icon animation
+- Integrated theme settings in Settings page under Appearance section
+- Updated all dashboard components to support proper dark mode styling:
+  - Fixed vendor information cards and PO matching status displays
+  - Updated status indicators and color schemes for both themes
+  - Converted hardcoded colors to theme-aware CSS variables
+  - Enhanced skeleton loading states with proper theme colors
+
 ## System Architecture
 
 ### Frontend Architecture

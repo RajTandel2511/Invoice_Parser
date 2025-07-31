@@ -205,8 +205,8 @@ export default function DetailPanel({
 
             {/* Vendor Information */}
             <Card>
-              <CardContent className="p-4 bg-gray-50">
-                <h3 className="text-sm font-medium text-gray-900 mb-3">
+              <CardContent className="p-4 bg-muted/30">
+                <h3 className="text-sm font-medium text-foreground mb-3">
                   Vendor Information
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -294,14 +294,14 @@ export default function DetailPanel({
                 <CardContent
                   className={`p-4 ${
                     invoice.status === "review_needed"
-                      ? "bg-yellow-50 border-yellow-200"
+                      ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800/30"
                       : invoice.status === "matched"
-                      ? "bg-green-50 border-green-200"
-                      : "bg-red-50 border-red-200"
+                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/30"
+                      : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/30"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-gray-800">
+                    <h3 className="text-sm font-medium text-foreground">
                       PO Matching Status
                     </h3>
                     <span
@@ -313,19 +313,19 @@ export default function DetailPanel({
                   </div>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-gray-600">PO Amount:</span>
-                      <span className="font-medium">
+                      <span className="text-muted-foreground">PO Amount:</span>
+                      <span className="font-medium text-foreground">
                         {formatCurrency(invoice.poAmount)}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Invoice Amount:</span>
-                      <span className="font-medium">
+                      <span className="text-muted-foreground">Invoice Amount:</span>
+                      <span className="font-medium text-foreground">
                         {formatCurrency(invoice.totalAmount)}
                       </span>
                     </div>
                     {discrepancy !== 0 && (
-                      <div className="flex justify-between text-yellow-700">
+                      <div className="flex justify-between text-yellow-700 dark:text-yellow-400">
                         <span className="font-medium">Difference:</span>
                         <span className="font-semibold">
                           {discrepancy > 0 ? "+" : ""}
@@ -341,7 +341,7 @@ export default function DetailPanel({
             {/* Line Items */}
             {invoice.lineItems && invoice.lineItems.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium text-gray-900 mb-3">Line Items</h3>
+                <h3 className="text-sm font-medium text-foreground mb-3">Line Items</h3>
                 <Card>
                   <Table>
                     <TableHeader>
