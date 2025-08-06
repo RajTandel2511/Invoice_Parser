@@ -86,6 +86,39 @@ let mockInvoices: Invoice[] = [
 // Simulate API delay
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Function to save file to uploads folder
+const saveFileToUploads = async (file: File): Promise<string> => {
+  try {
+    // Create a unique filename with timestamp
+    const timestamp = Date.now();
+    const originalName = file.name;
+    const extension = originalName.substring(originalName.lastIndexOf('.'));
+    const nameWithoutExt = originalName.substring(0, originalName.lastIndexOf('.'));
+    const uniqueFilename = `${nameWithoutExt}_${timestamp}${extension}`;
+    
+    // Convert file to blob and create download link
+    const blob = new Blob([file], { type: file.type });
+    const url = URL.createObjectURL(blob);
+    
+    // Create a temporary link element to trigger download
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = uniqueFilename;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    // Clean up the URL
+    URL.revokeObjectURL(url);
+    
+    return uniqueFilename;
+  } catch (error) {
+    console.error('Error saving file:', error);
+    throw new Error('Failed to save file');
+  }
+};
+
 export const mockApi = {
   // Get all invoices
   async getInvoices(): Promise<Invoice[]> {
@@ -103,44 +136,54 @@ export const mockApi = {
   async uploadInvoice(file: File): Promise<{ success: boolean; message: string; invoiceId?: string }> {
     await delay(2000); // Simulate processing time
     
-    const mockInvoiceData: InsertInvoice = {
-      invoiceNumber: `INV-${Date.now()}`,
-      poNumber: "",
-      vendorName: "Extracted Vendor Name",
-      vendorId: `VND-${Math.floor(Math.random() * 10000)}`,
-      invoiceDate: new Date(),
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-      subtotal: "1000.00",
-      taxAmount: "100.00",
-      totalAmount: "1100.00",
-      poAmount: "",
-      status: "review_needed",
-      lineItems: [
-        {
-          description: "Extracted Line Item",
-          quantity: 1,
-          unitPrice: 1000,
-          total: 1000
-        }
-      ],
-      notes: "Automatically processed from uploaded file",
-      filename: file.name,
-    };
+    try {
+      // Save file to uploads folder
+      const savedFilename = await saveFileToUploads(file);
+      
+      const mockInvoiceData: InsertInvoice = {
+        invoiceNumber: `INV-${Date.now()}`,
+        poNumber: "",
+        vendorName: "Extracted Vendor Name",
+        vendorId: `VND-${Math.floor(Math.random() * 10000)}`,
+        invoiceDate: new Date(),
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+        subtotal: "1000.00",
+        taxAmount: "100.00",
+        totalAmount: "1100.00",
+        poAmount: "",
+        status: "review_needed",
+        lineItems: [
+          {
+            description: "Extracted Line Item",
+            quantity: 1,
+            unitPrice: 1000,
+            total: 1000
+          }
+        ],
+        notes: "Automatically processed from uploaded file",
+        filename: savedFilename,
+      };
 
-    const newInvoice: Invoice = {
-      ...mockInvoiceData,
-      id: nanoid(),
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      const newInvoice: Invoice = {
+        ...mockInvoiceData,
+        id: nanoid(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-    mockInvoices.push(newInvoice);
+      mockInvoices.push(newInvoice);
 
-    return {
-      success: true,
-      message: "Invoice uploaded and processed successfully",
-      invoiceId: newInvoice.id
-    };
+      return {
+        success: true,
+        message: `Invoice uploaded and processed successfully. File saved as: ${savedFilename}`,
+        invoiceId: newInvoice.id
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to upload file'
+      };
+    }
   },
 
   // Update invoice
@@ -204,7 +247,7 @@ export const mockApi = {
 
     return {
       success: true,
-      message: "Invoice reprocessing started"
+      message: "Invoice reprocessing completed"
     };
   },
 

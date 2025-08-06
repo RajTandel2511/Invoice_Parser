@@ -2,8 +2,7 @@ import { FileText, Upload, List, Link2, Settings, BarChart3 } from "lucide-react
 import { Link, useLocation } from "wouter";
 
 const navigationItems = [
-  { icon: BarChart3, label: "Dashboard", href: "/" },
-  { icon: Upload, label: "Upload Invoice", href: "/upload" },
+  { icon: Upload, label: "Dashboard", href: "/" },
   { icon: List, label: "Processed Invoices", href: "/invoices" },
   { icon: Link2, label: "PO Matching", href: "/matching" },
   { icon: Settings, label: "Settings", href: "/settings" },

@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CloudUpload, FileText, CheckCircle, X } from "lucide-react";
-import { mockApiRequest } from "@/lib/queryClient";
+import { mockApi } from "@/lib/mockApi";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -43,7 +43,7 @@ export default function UploadPanel({
         });
       }, 200);
 
-      const response = await mockApiRequest.uploadInvoice(file);
+      const response = await mockApi.uploadInvoice(file);
       clearInterval(progressInterval);
       setUploadProgress(100);
 
@@ -71,10 +71,10 @@ export default function UploadPanel({
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      const file = acceptedFiles[0];
-      if (file) {
+      // Upload each file sequentially
+      acceptedFiles.forEach((file) => {
         uploadMutation.mutate(file);
-      }
+      });
     },
     [uploadMutation]
   );
@@ -87,7 +87,7 @@ export default function UploadPanel({
       "image/jpeg": [".jpg", ".jpeg"],
     },
     maxSize: 10 * 1024 * 1024, // 10MB
-    multiple: false,
+    multiple: true,
   });
 
   const getStatusBadge = (status: string) => {
@@ -128,7 +128,7 @@ export default function UploadPanel({
               {isDragActive ? "Drop files here" : "Drag & drop or click to upload"}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              PDF, PNG, JPG (max 10MB)
+              PDF, PNG, JPG (max 10MB per file)
             </p>
           </div>
 
@@ -148,7 +148,7 @@ export default function UploadPanel({
             <div className="mt-4 text-center">
               <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                Processing invoice...
+                Processing invoices...
               </div>
             </div>
           )}

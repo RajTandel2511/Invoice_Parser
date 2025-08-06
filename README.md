@@ -80,16 +80,16 @@ InvoiceFlow/
 ## Features Overview
 
 ### Dashboard
-- View all invoices with mock data
 - Upload new invoices with drag & drop
+- View all invoices with mock data
 - Edit invoice details inline
 - Status tracking (Matched, Review Needed, Processing)
 
 ### Upload System
-- Drag & drop file upload
+- Drag & drop file upload (supports multiple files)
 - Support for PDF, PNG, JPG files
 - Progress tracking during upload
-- File size validation (10MB limit)
+- File size validation (10MB per file)
 
 ### PO Matching
 - Match invoices with purchase orders

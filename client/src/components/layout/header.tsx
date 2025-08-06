@@ -8,10 +8,10 @@ export default function Header() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">
-            Invoice Processing Dashboard
+            Invoice Dashboard
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Upload and process invoices with automated PO matching
+            Upload and manage invoices with automated processing
           </p>
         </div>
         <div className="flex items-center space-x-4">

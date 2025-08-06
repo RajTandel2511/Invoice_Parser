@@ -310,7 +310,7 @@ export default function DetailPanel({
                     Due Date
                   </Label>
                   <p className="mt-1">
-                    {new Date(invoice.dueDate).toLocaleDateString()}
+                    {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : "Not specified"}
                   </p>
                 </div>
               </div>

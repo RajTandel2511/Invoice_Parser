@@ -1,5 +1,8 @@
 ﻿# Combined Invoice Pipeline Script
 
+# ============================================================================
+# INSTALLATION COMMANDS (uncomment if needed)
+# ============================================================================
 # !pip install frontend
 # !pip install pymupdf
 # !pip install opencv-python
@@ -13,6 +16,104 @@ from PIL import Image
 import io
 from doctr.io import DocumentFile
 from doctr.models import ocr_predictor
+
+# ============================================================================
+# NETWORK PATH CONFIGURATION
+# ============================================================================
+# Import network configuration from external file
+try:
+    import sys
+    import os
+    # Add the parent directory to the Python path to find network_config.py
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from network_config import NETWORK_CONFIG, get_network_path, get_local_fallback, is_network_enabled
+    print("SUCCESS: Loaded network configuration from network_config.py")
+except ImportError:
+    print("WARNING: network_config.py not found, using default configuration")
+    # Default configuration if external file not found
+    NETWORK_CONFIG = {
+        "projects_server": "192.168.1.130",
+        "projects_share": "Projects", 
+        "projects_folder": "Raj",
+        "enable_network": True,
+        "local_fallback": "data/network_fallback/"
+    }
+    
+    def get_network_path():
+        return f"\\\\{NETWORK_CONFIG['projects_server']}\\{NETWORK_CONFIG['projects_share']}\\{NETWORK_CONFIG['projects_folder']}\\"
+    
+    def get_local_fallback():
+        return NETWORK_CONFIG["local_fallback"]
+    
+    def is_network_enabled():
+        return NETWORK_CONFIG.get("enable_network", True)
+
+# Configure network paths
+NETWORK_PATHS = {
+    "projects_folder": get_network_path(),
+    "local_fallback": get_local_fallback()
+}
+
+def get_accessible_path(path_key):
+    """
+    Try network path first, then fallback to local path.
+    Returns the first accessible path or None if neither works.
+    """
+    network_path = NETWORK_PATHS.get(path_key)
+    local_path = NETWORK_PATHS.get("local_fallback")
+    
+    # Check if network is enabled
+    if not is_network_enabled():
+        print(f"WARNING: Network disabled, using local fallback: {local_path}")
+        if local_path:
+            os.makedirs(local_path, exist_ok=True)
+            return local_path
+        return None
+    
+    # Try network path first
+    if network_path and os.path.exists(network_path):
+        print(f"SUCCESS: Using network path: {network_path}")
+        return network_path
+    
+    # Fallback to local path
+    if local_path:
+        os.makedirs(local_path, exist_ok=True)
+        print(f"WARNING: Network path not accessible, using local fallback: {local_path}")
+        return local_path
+    
+    print(f"ERROR: Neither network nor local path accessible for: {path_key}")
+    return None
+
+# Test network connectivity
+PROJECTS_PATH = get_accessible_path("projects_folder")
+if not PROJECTS_PATH:
+    print("WARNING: Network path not accessible. Some features may be limited.")
+    print("   To enable full functionality, ensure network path is accessible or")
+    print("   copy required files to the local fallback folder.")
+    
+    # Create sample files in local fallback for testing
+    def create_sample_files():
+        """Create sample files in local fallback directory for testing"""
+        fallback_dir = NETWORK_PATHS["local_fallback"]
+        os.makedirs(fallback_dir, exist_ok=True)
+        
+        # Create sample PDF files with PO/Job numbers
+        sample_files = [
+            "PO_12345_sample.pdf",
+            "Job_25.16_sample.pdf", 
+            "PO_67890_sample.pdf",
+            "Job_25.02_sample.pdf"
+        ]
+        
+        for filename in sample_files:
+            filepath = os.path.join(fallback_dir, filename)
+            if not os.path.exists(filepath):
+                # Create empty file for testing
+                with open(filepath, 'w') as f:
+                    f.write(f"Sample file: {filename}")
+                print(f"Created sample file: {filepath}")
+    
+    create_sample_files()
 
 # Load OCR model (CPU or GPU)
 model = ocr_predictor(pretrained=True)
@@ -756,6 +857,11 @@ def extract_info(value, mode, directory_path):
     - Tuple: (match_string or None, file_name or None)
     """
     try:
+        # Check if directory exists
+        if not os.path.exists(directory_path):
+            print(f"⚠️ Directory not accessible: {directory_path}")
+            return (None, None)
+            
         for filename in os.listdir(directory_path):
             if filename.endswith(".pdf") or filename.endswith(".txt"):
                 if value in filename:
@@ -771,14 +877,14 @@ for _, row in df_po.iterrows():
     match_found = False
 
     if pd.notna(row["PO_Number"]) and row["PO_Number"] != "":
-        result = extract_info(row["PO_Number"], "po", "\\\\192.168.1.130\\Projects\\Raj\\")
+        result = extract_info(row["PO_Number"], "po", PROJECTS_PATH)
         if result[0]:
             po_verified_by.append(result[0])
             job_verified_by.append("")
             match_found = True
 
     if not match_found and pd.notna(row["Job_Number"]) and row["Job_Number"] != "":
-        result = extract_info(row["Job_Number"], "job", "\\\\192.168.1.130\\Projects\\Raj\\")
+        result = extract_info(row["Job_Number"], "job", PROJECTS_PATH)
         if result[0]:
             job_verified_by.append(result[0])
             po_verified_by.append("")
@@ -902,7 +1008,7 @@ import re
 import pandas as pd
 import fitz  # PyMuPDF
 
-pdf_folder = "\\\\192.168.1.130\\Projects\\Raj\\"
+pdf_folder = PROJECTS_PATH if PROJECTS_PATH else "data/network_fallback/"
 input_path = "outputs/excel_files/pixtral_po_results.csv"
 output_path = "outputs/excel_files/po_verified.csv"
 routing_path = "data/Routing_Code.xlsx"
@@ -1271,7 +1377,7 @@ def process_po_folder(pdf_folder, image_folder, cropped_folder, text_output_fold
 
 # Cell 7: Example Run (Updated paths)
 process_po_folder(
-    pdf_folder="\\\\192.168.1.130\\Projects\\Raj\\",
+    pdf_folder=PROJECTS_PATH if PROJECTS_PATH else "data/network_fallback/",
 image_folder=r"data/image_of_pos",
 cropped_folder=r"data/cropped_images",
 text_output_folder=r"data/po_ocr_output"

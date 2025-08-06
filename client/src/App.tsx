@@ -23,8 +23,8 @@ function Router() {
         
         <div className="flex-1 overflow-auto">
           <Switch>
-            <Route path="/" component={Dashboard} />
-            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/" component={Upload} />
+            <Route path="/dashboard" component={Upload} />
             <Route path="/upload" component={Upload} />
             <Route path="/invoices" component={Invoices} />
             <Route path="/matching" component={Matching} />

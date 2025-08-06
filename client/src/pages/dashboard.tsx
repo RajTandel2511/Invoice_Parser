@@ -14,7 +14,7 @@ export default function Dashboard() {
     queryFn: mockApiRequest.getInvoices,
   });
 
-  const { data: selectedInvoice } = useQuery<Invoice>({
+  const { data: selectedInvoice } = useQuery<Invoice | null>({
     queryKey: ["invoice", selectedInvoiceId],
     queryFn: () => mockApiRequest.getInvoice(selectedInvoiceId!),
     enabled: !!selectedInvoiceId,
