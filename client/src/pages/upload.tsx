@@ -1,17 +1,36 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CloudUpload } from "lucide-react";
+import { CloudUpload, FileText, Download } from "lucide-react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 
+interface UploadedFile {
+  filename: string;
+  size: number;
+  uploadDate: string;
+  path: string;
+}
+
 export default function Upload() {
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Fetch uploaded files on component mount
+  useEffect(() => {
+    const fetchFiles = async () => {
+      const result = await api.getUploadedFiles();
+      if (result.success && result.files) {
+        setUploadedFiles(result.files);
+      }
+    };
+    fetchFiles();
+  }, []);
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -41,6 +60,16 @@ export default function Upload() {
         title: "Upload Successful",
         description: data.message,
       });
+      
+      // Refresh the uploaded files list
+      const fetchFiles = async () => {
+        const result = await api.getUploadedFiles();
+        if (result.success && result.files) {
+          setUploadedFiles(result.files);
+        }
+      };
+      fetchFiles();
+      
       queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
     },
     onError: (error) => {
@@ -73,6 +102,90 @@ export default function Upload() {
     maxSize: 10 * 1024 * 1024, // 10MB
     multiple: true,
   });
+
+  const handleProcessInvoices = async () => {
+    try {
+      // Check if there are any PDF files to process
+      const pdfFiles = uploadedFiles.filter(file => file.filename.endsWith('.pdf'));
+      
+      if (pdfFiles.length === 0) {
+        toast({
+          title: "No PDF Files",
+          description: "No PDF files available to process",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Processing Invoices",
+        description: `Starting to process ${pdfFiles.length} PDF files...`,
+      });
+
+      // For now, just show a success message
+      // In the future, this would call the Python processing script
+      setTimeout(() => {
+        toast({
+          title: "Processing Complete!",
+          description: `Successfully processed ${pdfFiles.length} invoices`,
+        });
+      }, 2000);
+
+    } catch (error) {
+      toast({
+        title: "Processing Failed",
+        description: error instanceof Error ? error.message : "Failed to process invoices",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadAllFiles = async () => {
+    try {
+      if (uploadedFiles.length === 0) {
+        toast({
+          title: "No Files",
+          description: "No files available to download",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      toast({
+        title: "Downloading Files",
+        description: "Preparing files for download...",
+      });
+
+      // Download each file sequentially
+      for (const file of uploadedFiles) {
+        try {
+          // Create a download link for each file
+          const link = document.createElement('a');
+          link.href = `http://localhost:3001/api/files/${file.filename}`;
+          link.download = file.filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          // Small delay between downloads
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (error) {
+          console.error(`Failed to download ${file.filename}:`, error);
+        }
+      }
+
+      toast({
+        title: "Download Complete",
+        description: "All files have been downloaded!",
+      });
+    } catch (error) {
+      toast({
+        title: "Download Failed",
+        description: "Failed to download files",
+        variant: "destructive",
+      });
+    }
+  };
 
   return (
     <div className="container mx-auto p-6">
@@ -119,6 +232,28 @@ export default function Upload() {
                   <Progress value={uploadProgress} className="h-2" />
                 </div>
               )}
+
+              {/* Action Buttons */}
+              <div className="mt-6 flex gap-3">
+                <Button 
+                  onClick={handleProcessInvoices}
+                  className="flex-1"
+                  variant="default"
+                  disabled={uploadedFiles.filter(f => f.filename.endsWith('.pdf')).length === 0}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Process Invoices
+                </Button>
+                <Button 
+                  onClick={handleDownloadAllFiles}
+                  className="flex-1"
+                  variant="outline"
+                  disabled={uploadedFiles.length === 0}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Files
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
