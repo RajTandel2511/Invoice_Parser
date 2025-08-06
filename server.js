@@ -4,6 +4,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 
 const app = express();
 const PORT = 3001;
@@ -141,6 +142,199 @@ app.get('/api/files/:filename', (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error downloading file',
+      error: error.message
+    });
+  }
+});
+
+// Download processed files endpoints
+app.get('/api/download/ap-invoices', (req, res) => {
+  try {
+    const filePath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'APInvoicesImport1.xlsx');
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'APInvoicesImport1.xlsx not found. Please process invoices first.'
+      });
+    }
+
+    res.download(filePath, 'APInvoicesImport1.xlsx');
+
+  } catch (error) {
+    console.error('Download AP invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error downloading AP invoices file',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/download/invoice-spectrum', (req, res) => {
+  try {
+    const filePath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'invoice_spectrum_format.txt');
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'invoice_spectrum_format.txt not found. Please process invoices first.'
+      });
+    }
+
+    res.download(filePath, 'invoice_spectrum_format.txt');
+
+  } catch (error) {
+    console.error('Download invoice spectrum error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error downloading invoice spectrum file',
+      error: error.message
+    });
+  }
+});
+
+// Check if processed files exist
+app.get('/api/check-processed-files', (req, res) => {
+  try {
+    const apInvoicesPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'APInvoicesImport1.xlsx');
+    const spectrumPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'invoice_spectrum_format.txt');
+    
+    const apInvoicesExists = fs.existsSync(apInvoicesPath);
+    const spectrumExists = fs.existsSync(spectrumPath);
+    
+    res.json({
+      success: true,
+      apInvoicesExists,
+      spectrumExists,
+      bothExist: apInvoicesExists && spectrumExists
+    });
+
+  } catch (error) {
+    console.error('Check processed files error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error checking processed files',
+      error: error.message
+    });
+  }
+});
+
+// Process invoices endpoint
+app.post('/api/process-invoices', async (req, res) => {
+  try {
+    // Check if uploads directory exists and has files
+    if (!fs.existsSync(uploadsDir)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Uploads directory does not exist'
+      });
+    }
+
+    const files = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep' && file.endsWith('.pdf'));
+
+    if (files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No PDF files found in uploads directory'
+      });
+    }
+
+    // Create raw_pdfs directory if it doesn't exist
+    const rawPdfsDir = path.join(__dirname, 'process', 'data', 'raw_pdfs');
+    if (!fs.existsSync(rawPdfsDir)) {
+      fs.mkdirSync(rawPdfsDir, { recursive: true });
+    }
+
+    // Move files from uploads to raw_pdfs
+    const movedFiles = [];
+    for (const file of files) {
+      const sourcePath = path.join(uploadsDir, file);
+      const destPath = path.join(rawPdfsDir, file);
+      
+      try {
+        fs.copyFileSync(sourcePath, destPath);
+        fs.unlinkSync(sourcePath); // Remove from uploads
+        movedFiles.push(file);
+        console.log(`Moved file: ${file}`);
+      } catch (error) {
+        console.error(`Error moving file ${file}:`, error);
+      }
+    }
+
+    if (movedFiles.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to move any files'
+      });
+    }
+
+    // Execute Python script
+    const pythonScriptPath = path.join(__dirname, 'process', 'notebooks', 'invoice_pipeline_combined.py');
+    const processDir = path.join(__dirname, 'process');
+
+    console.log(`Executing Python script: ${pythonScriptPath}`);
+    console.log(`Working directory: ${processDir}`);
+
+    const pythonProcess = spawn('python', ['notebooks/invoice_pipeline_combined.py'], {
+      cwd: processDir,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      env: { 
+        ...process.env, 
+        PYTHONIOENCODING: 'utf-8',
+        PYTHONUTF8: '1'
+      }
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+      console.log(`Python stdout: ${data}`);
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+      console.error(`Python stderr: ${data}`);
+    });
+
+    pythonProcess.on('close', (code) => {
+      if (code === 0) {
+        console.log('Python script executed successfully');
+        res.json({
+          success: true,
+          message: `Successfully processed ${movedFiles.length} files`,
+          files: movedFiles,
+          stdout: stdout,
+          stderr: stderr
+        });
+      } else {
+        console.error(`Python script failed with code ${code}`);
+        res.status(500).json({
+          success: false,
+          message: `Python script failed with exit code ${code}`,
+          stdout: stdout,
+          stderr: stderr
+        });
+      }
+    });
+
+    pythonProcess.on('error', (error) => {
+      console.error('Failed to start Python process:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to start Python process',
+        error: error.message
+      });
+    });
+
+  } catch (error) {
+    console.error('Process invoices error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error processing invoices',
       error: error.message
     });
   }

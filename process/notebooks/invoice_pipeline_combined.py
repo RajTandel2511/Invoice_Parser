@@ -194,7 +194,7 @@ def call_mistral_api(prompt):
     if response.status_code == 200:
         return response.json()["choices"][0]["message"]["content"]
     else:
-        raise Exception(f"❌ API Error {response.status_code}: {response.text}")
+        raise Exception(f"ERROR: API Error {response.status_code}: {response.text}")
 
 
 def clean_ocr_text(text: str) -> str:
@@ -282,7 +282,7 @@ If any field is unclear or missing, return it as an empty string `""`. Do not gu
 
 ---
 
-✅ RETURN:
+SUCCESS: RETURN:
 A JSON object with exactly the 7 fields. Leave missing fields as empty strings `""`.
 """
 
@@ -562,7 +562,7 @@ for txt_file in os.listdir(ocr_txt_folder):
 # --- Step 2: Save Matches to CSV ---
 match_df = pd.DataFrame(final_matches)
 match_df.to_csv(output_csv, index=False)
-print(f"✅ Best vendor matches saved to {output_csv}")
+print(f"SUCCESS: Best vendor matches saved to {output_csv}")
 
 # Vendor approval section removed - continuing directly to next step
 
@@ -589,15 +589,15 @@ for _, row in match_df.iterrows():
         data["Vendor_Code"] = row["Vendor_Code"]
         data["Vendor_Name"] = row["Vendor_Name"]
 
-        # ❌ Remove logic for Distribution_GL_Account, Phase_Code, Cost_Type
+        # ERROR: Remove logic for Distribution_GL_Account, Phase_Code, Cost_Type
 
         # Save updated JSON
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
-        print(f"✅ Enriched {json_path}")
+        print(f"SUCCESS: Enriched {json_path}")
     else:
-        print(f"❌ JSON not found for: {base_name}")
+        print(f"ERROR: JSON not found for: {base_name}")
 
 import os
 os.environ["MISTRAL_API_KEY"] = "5GPPqcV6edATEGnl0w09ORmhu8zqIzUL"  # Replace with your actual key
@@ -622,16 +622,16 @@ def convert_pdf_to_image(pdf_path, page_number=0, poppler_path=POPPLER_PATH):
     try:
         # Debug: Check if poppler path exists
         if not os.path.exists(poppler_path):
-            print(f"⚠️ Poppler path does not exist: {poppler_path}")
+            print(f"WARNING: Poppler path does not exist: {poppler_path}")
             return None
             
         # Debug: Check if pdfinfo exists in the poppler path
         pdfinfo_path = os.path.join(poppler_path, "pdfinfo.exe")
         if not os.path.exists(pdfinfo_path):
-            print(f"⚠️ pdfinfo not found at: {pdfinfo_path}")
+            print(f"WARNING: pdfinfo not found at: {pdfinfo_path}")
             return None
             
-        print(f"🔍 Using poppler path: {poppler_path}")
+        print(f"SEARCH: Using poppler path: {poppler_path}")
         images = convert_from_path(pdf_path, dpi=200, poppler_path=poppler_path)
         if not images:
             raise ValueError("No images generated from PDF.")
@@ -741,7 +741,7 @@ def classify_po(value):
 def process_pdf_folder(folder_path, output_csv="outputs/excel_files/pixtral_po_results.csv"):
     # Check if folder exists
     if not os.path.exists(folder_path):
-        print(f"❌ Error: Folder {folder_path} does not exist!")
+        print(f"ERROR: Error: Folder {folder_path} does not exist!")
         return
     
     api_key = os.environ.get("MISTRAL_API_KEY")
@@ -753,10 +753,10 @@ def process_pdf_folder(folder_path, output_csv="outputs/excel_files/pixtral_po_r
     
     # Count PDF files
     pdf_files = [f for f in os.listdir(folder_path) if f.lower().endswith('.pdf')]
-    print(f"📁 Found {len(pdf_files)} PDF files in {folder_path}")
+    print(f"FOLDER: Found {len(pdf_files)} PDF files in {folder_path}")
     
     if len(pdf_files) == 0:
-        print("⚠️ No PDF files found. Creating empty results.")
+        print("WARNING: No PDF files found. Creating empty results.")
         results.append({
             "file_name": "no_files_found",
             "extracted_po_number": "",
@@ -765,7 +765,7 @@ def process_pdf_folder(folder_path, output_csv="outputs/excel_files/pixtral_po_r
 
     for file in pdf_files:
         full_path = os.path.join(folder_path, file)
-        print(f"\U0001F4C4 Processing {file}...")
+        print(f"FILE: Processing {file}...")
 
         img_path = convert_pdf_to_image(full_path)
         if not img_path:
@@ -788,35 +788,35 @@ def process_pdf_folder(folder_path, output_csv="outputs/excel_files/pixtral_po_r
 
         os.remove(img_path)
 
-    # ✅ Create DataFrame from extracted results
+    # SUCCESS: Create DataFrame from extracted results
     df = pd.DataFrame(results)
     
     # Debug: Print DataFrame info
-    print(f"📊 DataFrame shape: {df.shape}")
-    print(f"📋 DataFrame columns: {list(df.columns)}")
-    print(f"📄 DataFrame head:\n{df.head()}")
+    print(f"DATA: DataFrame shape: {df.shape}")
+    print(f"INFO: DataFrame columns: {list(df.columns)}")
+    print(f"FILE: DataFrame head:\n{df.head()}")
     
     # Check if extracted_po_number column exists, if not create it
     if 'extracted_po_number' not in df.columns:
-        print("⚠️ Warning: extracted_po_number column not found. Creating empty column.")
+        print("WARNING: Warning: extracted_po_number column not found. Creating empty column.")
         df['extracted_po_number'] = ''
     
-    # ✅ Perform PO Classification using extracted_po_number
+    # SUCCESS: Perform PO Classification using extracted_po_number
     try:
         df[['PO_Number', 'Job_Number', 'WO_Number', 'Remarks']] = df['extracted_po_number'].apply(
             lambda x: pd.Series(classify_po(x))
         )
     except Exception as e:
-        print(f"❌ Error during PO classification: {e}")
+        print(f"ERROR: Error during PO classification: {e}")
         # Create empty columns if classification fails
         df['PO_Number'] = ''
         df['Job_Number'] = ''
         df['WO_Number'] = ''
         df['Remarks'] = ''
 
-    # ✅ Save the full output to CSV
+    # SUCCESS: Save the full output to CSV
     df.to_csv(output_csv, index=False)
-    print(f"\n✅ PO numbers with classification saved to {output_csv}")
+    print(f"\nSUCCESS: PO numbers with classification saved to {output_csv}")
 
 pdf_folder = "data/raw_pdfs"
 output_csv = "outputs/excel_files/pixtral_po_results.csv"
@@ -859,16 +859,16 @@ def extract_info(value, mode, directory_path):
     try:
         # Check if directory exists
         if not os.path.exists(directory_path):
-            print(f"⚠️ Directory not accessible: {directory_path}")
+            print(f"WARNING: Directory not accessible: {directory_path}")
             return (None, None)
             
         for filename in os.listdir(directory_path):
             if filename.endswith(".pdf") or filename.endswith(".txt"):
                 if value in filename:
-                    return (f"✅ Found in {filename}", filename)
+                    return (f"SUCCESS: Found in {filename}", filename)
         return (None, None)
     except Exception as e:
-        return (f"❌ Error: {str(e)}", None)
+        return (f"ERROR: Error: {str(e)}", None)
 
 po_verified_by = []
 job_verified_by = []
@@ -891,8 +891,8 @@ for _, row in df_po.iterrows():
             match_found = True
 
     if not match_found:
-        po_verified_by.append("❌ Not Found")
-        job_verified_by.append("❌ Not Found")
+        po_verified_by.append("ERROR: Not Found")
+        job_verified_by.append("ERROR: Not Found")
 
 df_po["po_verified_by"] = po_verified_by
 df_po["job_verified_by"] = job_verified_by
@@ -909,15 +909,15 @@ final_columns = [
 # Check which columns exist and create missing ones
 missing_columns = [col for col in final_columns if col not in df_po.columns]
 if missing_columns:
-    print(f"⚠️ Warning: Missing columns: {missing_columns}")
+    print(f"WARNING: Warning: Missing columns: {missing_columns}")
     for col in missing_columns:
         df_po[col] = ""
 
 # Only use columns that exist
 available_columns = [col for col in final_columns if col in df_po.columns]
 df_po[available_columns].to_csv(output_csv, index=False)
-print("✅ Final file saved:", output_csv)
-print(f"📋 Available columns: {available_columns}")
+print("SUCCESS: Final file saved:", output_csv)
+print(f"INFO: Available columns: {available_columns}")
 df_po[available_columns].head()
 
 import pandas as pd
@@ -950,13 +950,13 @@ for file in os.listdir(json_folder):
 
     vendor_code = str(data.get("Vendor_Code", "")).strip()
     if not vendor_code:
-        print(f"❌ Skipping {file} — Vendor_Code missing")
+        print(f"ERROR: Skipping {file} — Vendor_Code missing")
         continue
 
     # Look up vendor info
     vendor_row = vendor_df[vendor_df["Vendor_Code"] == vendor_code]
     if vendor_row.empty:
-        print(f"❌ Skipping {file} — Vendor_Code not found in Vendor_List")
+        print(f"ERROR: Skipping {file} — Vendor_Code not found in Vendor_List")
         continue
 
     vendor_info = vendor_row.iloc[0]
@@ -966,7 +966,7 @@ for file in os.listdir(json_folder):
     # Look up corresponding row in pixtral results
     pixtral_row = pixtral_df[pixtral_df["file_base"] == file_base]
     if pixtral_row.empty:
-        print(f"❌ Skipping {file} — Not found in pixtral_po_results.csv")
+        print(f"ERROR: Skipping {file} — Not found in pixtral_po_results.csv")
         continue
 
     pixtral_row = pixtral_row.iloc[0]
@@ -999,7 +999,7 @@ for file in os.listdir(json_folder):
     with open(json_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
-    print(f"✅ Enriched {file}")
+    print(f"SUCCESS: Enriched {file}")
 
 # !pip install pymupdf xlrd
 
@@ -1032,7 +1032,7 @@ def extract_info(identifier, id_type, pdf_folder):
 
     # Check if network path is accessible
     if not os.path.exists(pdf_folder):
-        print(f"❌ Network path not accessible: {pdf_folder}")
+        print(f"ERROR: Network path not accessible: {pdf_folder}")
         return None, "", "", ""
 
     pattern = re.compile(rf"{'Purchase Order' if id_type == 'po' else 'Job'}[:\s]*{re.escape(str(identifier))}", re.IGNORECASE)
@@ -1056,10 +1056,10 @@ def extract_info(identifier, id_type, pdf_folder):
                             distribution_code = d[0]
                         return pdf_file, ordered_by, distribution_code
             except Exception as e:
-                print(f"❌ Error reading {pdf_file}: {e}")
+                print(f"ERROR: Error reading {pdf_file}: {e}")
                 continue
     except Exception as e:
-        print(f"❌ Error accessing network folder: {e}")
+        print(f"ERROR: Error accessing network folder: {e}")
         return None, "", "", ""
     
     return None, "", "", ""
@@ -1090,8 +1090,8 @@ for _, row in df_po.iterrows():
             match_found = True
 
     if not match_found:
-        po_verified_by.append("❌ Not Found")
-        job_verified_by.append("❌ Not Found")
+        po_verified_by.append("ERROR: Not Found")
+        job_verified_by.append("ERROR: Not Found")
 
     ordered_by_final.append(ordered_by)
     distribution_code_final.append(dist_code)
@@ -1108,7 +1108,7 @@ for i, row in df_po.iterrows():
     po_file = row["po_verified_by"].strip()
     
     if (not job_num or job_num.lower() in ["", "nan", "none"]) and \
-       (po_file and not po_file.startswith("❌")):
+       (po_file and not po_file.startswith("ERROR:")):
         pdf_path = os.path.join(pdf_folder, po_file)
         try:
             doc = fitz.open(pdf_path)
@@ -1119,7 +1119,7 @@ for i, row in df_po.iterrows():
                     df_po.at[i, "Job_Number"] = match.group(1).strip()
                     break
         except Exception as e:
-            print(f"❌ Error reading PDF {po_file}: {e}")
+            print(f"ERROR: Error reading PDF {po_file}: {e}")
 
 # -------------------------------
 # PM NAME LOOKUP AND REPLACE ORDERED_BY
@@ -1188,7 +1188,7 @@ print(df_po[["Job_Number", "ordered_by", "distribution_code", "routing_code"]].h
 df_po = df_po.astype(str).replace("nan", "")
 
 df_po.to_csv(output_path, index=False)
-print("✅ Final file saved to:", output_path)
+print("SUCCESS: Final file saved to:", output_path)
 
 # Cell 1: Import Libraries
 # !pip install pymupdf opencv-python pytesseract numpy pandas
@@ -1309,7 +1309,7 @@ def process_po_folder(pdf_folder, image_folder, cropped_folder, text_output_fold
 
     df_po = pd.read_csv("outputs/excel_files/po_verified.csv")
     valid_files = df_po["po_verified_by"].dropna()
-    valid_files = valid_files[~valid_files.str.contains("❌ Not Found", na=False)]
+    valid_files = valid_files[~valid_files.str.contains("ERROR: Not Found", na=False)]
     valid_files_list = valid_files.unique().tolist()
 
     valid_image_paths = pdf_to_images_logo_filtered(pdf_folder, image_folder, valid_files_list)
@@ -1392,7 +1392,7 @@ output_path = "data/po_ocr_extracted/final_extracted.csv"
 
 df_po = pd.read_csv("outputs/excel_files/po_verified.csv")
 valid_files = df_po["po_verified_by"].dropna()
-valid_files = valid_files[~valid_files.str.contains("❌ Not Found", na=False)]
+valid_files = valid_files[~valid_files.str.contains("ERROR: Not Found", na=False)]
 valid_basenames = [clean_base_name(f) for f in valid_files.unique()]
 
 results = []
@@ -1480,7 +1480,7 @@ for file in os.listdir(input_folder):
 os.makedirs(os.path.dirname(output_path), exist_ok=True)
 df = pd.DataFrame(results)
 df.to_csv(output_path, index=False)
-print(f"✅ Extraction completed. Results saved to {output_path}")
+print(f"SUCCESS: Extraction completed. Results saved to {output_path}")
 
 import os
 import json
@@ -1512,7 +1512,7 @@ po_df = pd.read_csv('outputs/excel_files/pixtral_po_results.csv')
 po_df['file_name'] = po_df['file_name'].str.lower().str.strip()
 df['file_name'] = df['file_name'].str.lower().str.strip()
 
-# ✅ Merge in all needed columns
+# SUCCESS: Merge in all needed columns
 df = df.merge(
     po_df[['file_name', 'extracted_po_number', 'PO_Number', 'Job_Number','WO_Number', 'Remarks']],
     on='file_name',
@@ -1634,7 +1634,7 @@ for index, row in df.iterrows():
         # This will be handled by the JSON update logic if needed
         pass
 
-print(f"✅ Ensured Invoice_Date and GL_Date are filled for {len(df)} records")
+print(f"SUCCESS: Ensured Invoice_Date and GL_Date are filled for {len(df)} records")
 
 def compute_shipping(row):
     # First try to use shipping charges from JSON extraction
@@ -1716,7 +1716,7 @@ for i, col in enumerate(ws.iter_cols(), 1):  # 1-based index
     ws.column_dimensions[get_column_letter(i)].width = adjusted_width
 
 wb.save(output_path)
-print("✅ Final Excel saved with PO classification and auto-sized columns:", output_path)
+print("SUCCESS: Final Excel saved with PO classification and auto-sized columns:", output_path)
 
 import pandas as pd
 import numpy as np
@@ -1733,16 +1733,16 @@ if os.path.exists(po_lines_file):
     try:
         po_lines_df = pd.read_csv(po_lines_file)
         if po_lines_df.empty or len(po_lines_df.columns) == 0:
-            print("⚠️ No invoice with PO is available - PO lines file is empty")
+            print("WARNING: No invoice with PO is available - PO lines file is empty")
             po_lines_df = pd.DataFrame()  # Create empty DataFrame
         else:
-            print(f"✅ Loaded PO lines data with {len(po_lines_df)} rows")
+            print(f"SUCCESS: Loaded PO lines data with {len(po_lines_df)} rows")
     except Exception as e:
-        print(f"⚠️ Error reading PO lines file: {e}")
-        print("⚠️ No invoice with PO is available")
+        print(f"WARNING: Error reading PO lines file: {e}")
+        print("WARNING: No invoice with PO is available")
         po_lines_df = pd.DataFrame()  # Create empty DataFrame
 else:
-    print("⚠️ No invoice with PO is available - PO lines file does not exist")
+    print("WARNING: No invoice with PO is available - PO lines file does not exist")
     po_lines_df = pd.DataFrame()  # Create empty DataFrame
 
 # Clean filenames to base names (no extensions)
@@ -1752,7 +1752,7 @@ po_verified_df["Base_File_Name"] = po_verified_df["po_verified_by"].apply(lambda
 if not po_lines_df.empty and "Source File" in po_lines_df.columns:
     po_lines_df["Base_File_Name"] = po_lines_df["Source File"].apply(lambda x: os.path.splitext(str(x))[0])
 else:
-    print("⚠️ Skipping PO lines processing - no valid PO data available")
+    print("WARNING: Skipping PO lines processing - no valid PO data available")
 
 # Output container
 output_rows = []
@@ -1778,7 +1778,7 @@ for _, inv_row in invoice_df.iterrows():
     # Find source file
     po_match = po_verified_df.loc[po_verified_df["PO_Number"] == po_number]
     if po_match.empty:
-        print(f"⚠️ No source file found for PO Number: {po_number}")
+        print(f"WARNING: No source file found for PO Number: {po_number}")
         continue
     
     source_file_base = po_match.iloc[0]["Base_File_Name"]
@@ -1786,20 +1786,20 @@ for _, inv_row in invoice_df.iterrows():
     
     # Find PO lines matching the source file
     if po_lines_df.empty or "Base_File_Name" not in po_lines_df.columns:
-        print(f"⚠️ No PO lines data available for PO Number: {po_number}")
+        print(f"WARNING: No PO lines data available for PO Number: {po_number}")
         continue
         
     po_lines = po_lines_df[po_lines_df["Base_File_Name"] == source_file_base].dropna(subset=["Unit Cost", "Extension"])
     
     if po_lines.empty:
-        print(f"⚠️ No PO lines found for Source File: {source_file_base}")
+        print(f"WARNING: No PO lines found for Source File: {source_file_base}")
         continue
 
     # Check if required columns exist
     required_columns = ["Extension", "Seq", "Part Number", "Quantity"]
     missing_columns = [col for col in required_columns if col not in po_lines.columns]
     if missing_columns:
-        print(f"⚠️ Missing required columns in PO lines: {missing_columns}")
+        print(f"WARNING: Missing required columns in PO lines: {missing_columns}")
         continue
         
     # Best match by closest Extension (total amount)
@@ -1870,7 +1870,7 @@ with open(txt_path, "w") as f:
         line = ",".join(row_str)
         f.write(line + "\n")
 
-print("✅ Spectrum import files generated successfully (CSV and cleaned TXT).")
+print("SUCCESS: Spectrum import files generated successfully (CSV and cleaned TXT).")
 
 import re
 import pandas as pd
@@ -2014,7 +2014,7 @@ for _, row in source_df.iterrows():
 
 # === Save changes ===
 wb.save(template_path)
-print("✅ APInvoicesImport1.xlsx updated with Item_Code mapped from G/L Code!")
+print("SUCCESS: APInvoicesImport1.xlsx updated with Item_Code mapped from G/L Code!")
 
 import os
 
@@ -2043,7 +2043,7 @@ for folder in folders_to_clear:
     else:
         print(f"Folder does not exist: {folder}")
 
-print("✅ All files cleared successfully.")
+print("SUCCESS: All files cleared successfully.")
 
 # Define processed_dir for completion flag
 processed_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'processed')
@@ -2054,4 +2054,4 @@ completion_flag_path = os.path.join(processed_dir, 'processing_complete.flag')
 with open(completion_flag_path, 'w') as f:
     f.write('complete')
 
-print("🎉 Processing pipeline completed successfully!")
+print("COMPLETE: Processing pipeline completed successfully!")

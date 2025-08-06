@@ -18,18 +18,38 @@ interface UploadedFile {
 export default function Upload() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [processingComplete, setProcessingComplete] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // Fetch uploaded files on component mount
   useEffect(() => {
     const fetchFiles = async () => {
-      const result = await api.getUploadedFiles();
-      if (result.success && result.files) {
-        setUploadedFiles(result.files);
+      try {
+        const result = await api.getUploadedFiles();
+        if (result.success && result.files) {
+          setUploadedFiles(result.files);
+        }
+      } catch (error) {
+        console.error('Error fetching uploaded files:', error);
       }
     };
     fetchFiles();
+  }, []);
+
+  // Check if processed files exist on component mount
+  useEffect(() => {
+    const checkProcessedFiles = async () => {
+      try {
+        const result = await api.checkProcessedFiles();
+        if (result.success && result.bothExist) {
+          setProcessingComplete(true);
+        }
+      } catch (error) {
+        console.error('Error checking processed files:', error);
+      }
+    };
+    checkProcessedFiles();
   }, []);
 
   const uploadMutation = useMutation({
@@ -122,14 +142,34 @@ export default function Upload() {
         description: `Starting to process ${pdfFiles.length} PDF files...`,
       });
 
-      // For now, just show a success message
-      // In the future, this would call the Python processing script
-      setTimeout(() => {
+      // Call the API to process invoices
+      const result = await api.processInvoices();
+      
+      if (result.success) {
         toast({
           title: "Processing Complete!",
-          description: `Successfully processed ${pdfFiles.length} invoices`,
+          description: result.message,
         });
-      }, 2000);
+        
+        // Set processing complete state
+        setProcessingComplete(true);
+        
+        // Refresh the uploaded files list after processing
+        const fetchFiles = async () => {
+          const result = await api.getUploadedFiles();
+          if (result.success && result.files) {
+            setUploadedFiles(result.files);
+          }
+        };
+        fetchFiles();
+        
+      } else {
+        toast({
+          title: "Processing Failed",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
 
     } catch (error) {
       toast({
@@ -140,48 +180,46 @@ export default function Upload() {
     }
   };
 
-  const handleDownloadAllFiles = async () => {
+  const handleDownloadProcessedFiles = async () => {
     try {
-      if (uploadedFiles.length === 0) {
+      if (!processingComplete) {
         toast({
-          title: "No Files",
-          description: "No files available to download",
+          title: "No Processed Files",
+          description: "Please process invoices first to generate downloadable files",
           variant: "destructive",
         });
         return;
       }
 
       toast({
-        title: "Downloading Files",
-        description: "Preparing files for download...",
+        title: "Downloading Processed Files",
+        description: "Downloading APInvoicesImport1.xlsx and invoice_spectrum_format.txt...",
       });
 
-      // Download each file sequentially
-      for (const file of uploadedFiles) {
-        try {
-          // Create a download link for each file
-          const link = document.createElement('a');
-          link.href = `http://localhost:3001/api/files/${file.filename}`;
-          link.download = file.filename;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          
-          // Small delay between downloads
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (error) {
-          console.error(`Failed to download ${file.filename}:`, error);
-        }
+      // Download both files
+      const apInvoicesResult = await api.downloadAPInvoices();
+      const spectrumResult = await api.downloadInvoiceSpectrum();
+
+      if (apInvoicesResult.success && spectrumResult.success) {
+        toast({
+          title: "Download Complete",
+          description: "Both processed files have been downloaded successfully!",
+        });
+      } else {
+        const errors = [];
+        if (!apInvoicesResult.success) errors.push("APInvoicesImport1.xlsx");
+        if (!spectrumResult.success) errors.push("invoice_spectrum_format.txt");
+        
+        toast({
+          title: "Download Partially Failed",
+          description: `Failed to download: ${errors.join(", ")}`,
+          variant: "destructive",
+        });
       }
-
-      toast({
-        title: "Download Complete",
-        description: "All files have been downloaded!",
-      });
     } catch (error) {
       toast({
         title: "Download Failed",
-        description: "Failed to download files",
+        description: "Failed to download processed files",
         variant: "destructive",
       });
     }
@@ -245,10 +283,10 @@ export default function Upload() {
                   Process Invoices
                 </Button>
                 <Button 
-                  onClick={handleDownloadAllFiles}
+                  onClick={handleDownloadProcessedFiles}
                   className="flex-1"
-                  variant="outline"
-                  disabled={uploadedFiles.length === 0}
+                  variant={processingComplete ? "default" : "outline"}
+                  disabled={!processingComplete}
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Download Files

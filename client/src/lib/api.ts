@@ -55,5 +55,113 @@ export const api = {
         message: error instanceof Error ? error.message : 'Failed to get files'
       };
     }
+  },
+
+  // Process invoices
+  async processInvoices(): Promise<{ success: boolean; message: string; files?: string[]; stdout?: string; stderr?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/process-invoices`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Processing failed');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Process invoices error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Processing failed'
+      };
+    }
+  },
+
+  // Check if processed files exist
+  async checkProcessedFiles(): Promise<{ success: boolean; apInvoicesExists?: boolean; spectrumExists?: boolean; bothExist?: boolean; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/check-processed-files`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to check processed files');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Check processed files error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to check processed files'
+      };
+    }
+  },
+
+  // Download AP invoices file
+  async downloadAPInvoices(): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/download/ap-invoices`);
+      
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || 'Download failed');
+      }
+
+      // Create download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'APInvoicesImport1.xlsx';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Download AP invoices error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Download failed'
+      };
+    }
+  },
+
+  // Download invoice spectrum file
+  async downloadInvoiceSpectrum(): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/download/invoice-spectrum`);
+      
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || 'Download failed');
+      }
+
+      // Create download link
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'invoice_spectrum_format.txt';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      return { success: true };
+    } catch (error) {
+      console.error('Download invoice spectrum error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Download failed'
+      };
+    }
   }
 }; 
