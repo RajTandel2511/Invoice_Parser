@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
+import { LoadingAnimation } from "@/components/LoadingAnimation";
 
 interface UploadedFile {
   filename: string;
@@ -19,6 +20,7 @@ export default function Upload() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [processingComplete, setProcessingComplete] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -137,6 +139,9 @@ export default function Upload() {
         return;
       }
 
+      // Start processing and show loading animation
+      setIsProcessing(true);
+
       toast({
         title: "Processing Invoices",
         description: `Starting to process ${pdfFiles.length} PDF files...`,
@@ -177,6 +182,9 @@ export default function Upload() {
         description: error instanceof Error ? error.message : "Failed to process invoices",
         variant: "destructive",
       });
+    } finally {
+      // Stop the loading animation
+      setIsProcessing(false);
     }
   };
 
@@ -227,6 +235,12 @@ export default function Upload() {
 
   return (
     <div className="container mx-auto p-6">
+      {/* Loading Animation */}
+      <LoadingAnimation 
+        isVisible={isProcessing} 
+        message="Processing invoices... Please wait while we extract and analyze your documents."
+      />
+      
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Invoice Dashboard</h1>
@@ -277,10 +291,10 @@ export default function Upload() {
                   onClick={handleProcessInvoices}
                   className="flex-1"
                   variant="default"
-                  disabled={uploadedFiles.filter(f => f.filename.endsWith('.pdf')).length === 0}
+                  disabled={uploadedFiles.filter(f => f.filename.endsWith('.pdf')).length === 0 || isProcessing}
                 >
                   <FileText className="h-4 w-4 mr-2" />
-                  Process Invoices
+                  {isProcessing ? "Processing..." : "Process Invoices"}
                 </Button>
                 <Button 
                   onClick={handleDownloadProcessedFiles}
