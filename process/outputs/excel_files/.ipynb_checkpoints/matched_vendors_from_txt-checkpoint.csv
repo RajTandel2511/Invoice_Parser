@@ -1,0 +1,35 @@
+TXT_File,Vendor_Code,Vendor_Name,Vendor_Contact,Vendor_Address,Address_Match_Score,Matched_Contact,Matched_By
+doc11114920250723074715-1.txt,RSDTOT,RSD ,,"26021 Atlantic Ocean Dr.
+Lake Forest, CA 92630",96,,address only
+doc11114920250723074715-10.txt,UMIAME,"Umili America, Inc.",(650) 922-2476,"39 S Linden Ave
+South San Francisco, CA 94080",87,,address only
+doc11114920250723074715-11.txt,UMIAME,"Umili America, Inc.",(650) 922-2476,"39 S Linden Ave
+South San Francisco, CA 94080",86,,address only
+doc11114920250723074715-12.txt,PACCOA,Pacific Coast Trane,,"PO BOX 44689
+San Francisco
+CA, 94",84,,address only
+doc11114920250723074715-13.txt,UMIAME,"Umili America, Inc.",(650) 922-2476,"39 S Linden Ave
+South San Francisco, CA 94080",86,,address only
+doc11114920250723074715-14.txt,PACCOA,Pacific Coast Trane,,"PO BOX 44689
+San Francisco
+CA, 94",84,,address only
+doc11114920250723074715-15.txt,UMIAME,"Umili America, Inc.",(650) 922-2476,"39 S Linden Ave
+South San Francisco, CA 94080",81,,address only
+doc11114920250723074715-2.txt,HILTOO,Hilti,,"P.O. Box 70299
+Philadelphia, PA 19176-0299",100,,address only
+doc11114920250723074715-3.txt,LORSON,Lord & Sons Inc.,(408) 817-8910,"P.O. Box 8464
+Pasadena, CA 91109-8464",97,4088178910,contact + address
+doc11114920250723074715-4.txt,LORSON,Lord & Sons Inc.,(408) 817-8910,"P.O. Box 8464
+Pasadena, CA 91109-8464",97,4088178910,contact + address
+doc11114920250723074715-5.txt,GENCAB,Genuine Cable Group,,"P.O. Box 734769
+Chicago, IL 60673-4769",100,,address only
+doc11114920250723074715-6.txt,GENCAB,Genuine Cable Group,,"P.O. Box 734769
+Chicago, IL 60673-4769",100,,address only
+doc11114920250723074715-7.txt,RUSSIG,Sigler,,"RUSSELL SIGLER INC P.O. Box 511884 Los Angeles, CA 90051-1827",100,,address only
+doc11114920250723074715-8.txt,UMIAME,"Umili America, Inc.",(650) 922-2476,"39 S Linden Ave
+South San Francisco, CA 94080",87,,address only
+doc11114920250723074715-9.txt,PACCOA,Pacific Coast Trane,,"PO BOX 44689
+San Francisco
+CA, 94",84,,address only
+ilovepdf_merged.txt,LENINT,Lennox ,(972) 497-5444,"P.O. Box 910549
+Dallas, TX 75391-0549",100,,address only

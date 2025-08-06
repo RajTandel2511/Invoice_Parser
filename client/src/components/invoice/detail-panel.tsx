@@ -1,25 +1,17 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { X, Save, Edit, RotateCcw, CheckCircle, AlertCircle, XCircle, Clock } from "lucide-react";
-import { type Invoice, insertInvoiceSchema } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { X, Edit, Save, RotateCcw, Trash2 } from "lucide-react";
+import { mockApiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { getStatusInfo, formatCurrency, formatDate } from "@/lib/types";
+import { type Invoice, insertInvoiceSchema } from "@shared/schema";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import {
   Table,
   TableBody,
@@ -29,26 +21,40 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const getStatusIcon = (status: string) => {
-  switch (status) {
-    case 'matched':
-      return <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />;
-    case 'review_needed':
-      return <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />;
-    case 'not_matched':
-      return <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />;
-    case 'pending':
-      return <Clock className="h-4 w-4 text-muted-foreground" />;
-    default:
-      return <Clock className="h-4 w-4 text-muted-foreground" />;
-  }
-};
-
 interface DetailPanelProps {
   invoice: Invoice;
   onInvoiceUpdate: () => void;
   onClose: () => void;
 }
+
+const getStatusInfo = (status: string) => {
+  switch (status) {
+    case "matched":
+      return {
+        label: "Matched",
+        color: "bg-green-100 text-green-800",
+        icon: "✓",
+      };
+    case "review_needed":
+      return {
+        label: "Review Needed",
+        color: "bg-yellow-100 text-yellow-800",
+        icon: "⚠",
+      };
+    case "processing":
+      return {
+        label: "Processing",
+        color: "bg-blue-100 text-blue-800",
+        icon: "⟳",
+      };
+    default:
+      return {
+        label: status,
+        color: "bg-gray-100 text-gray-800",
+        icon: "?",
+      };
+  }
+};
 
 export default function DetailPanel({
   invoice,
@@ -77,8 +83,8 @@ export default function DetailPanel({
 
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
-      const response = await apiRequest("PATCH", `/api/invoices/${invoice.id}`, data);
-      return response.json();
+      const response = await mockApiRequest.updateInvoice(invoice.id, data);
+      return response;
     },
     onSuccess: () => {
       toast({
@@ -99,8 +105,8 @@ export default function DetailPanel({
 
   const reprocessMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", `/api/invoices/${invoice.id}/reprocess`);
-      return response.json();
+      const response = await mockApiRequest.reprocessInvoice(invoice.id);
+      return response;
     },
     onSuccess: (data) => {
       toast({
@@ -123,324 +129,285 @@ export default function DetailPanel({
   };
 
   const statusInfo = getStatusInfo(invoice.status as any);
-  const discrepancy = invoice.poAmount 
-    ? parseFloat(invoice.totalAmount) - parseFloat(invoice.poAmount)
-    : 0;
 
   return (
-    <div className="w-1/2 border-l border-border bg-background overflow-y-auto">
-      <div className="p-8">
-        {/* Invoice Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-semibold text-foreground tracking-tight">
-              {invoice.invoiceNumber}
-            </h2>
-            <p className="text-muted-foreground mt-1">{invoice.vendorName}</p>
-          </div>
-          <div className="flex items-center space-x-3">
-            <span
-              className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-medium ${statusInfo.color}`}
-            >
-              {getStatusIcon(invoice.status)}
-              <span className="ml-2">{statusInfo.label}</span>
-            </span>
-            <Button variant="ghost" size="sm" onClick={onClose} className="rounded-xl">
+    <div className="w-1/2 p-6 overflow-y-auto">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              Invoice Details
+              <Badge className={statusInfo.color}>
+                {statusInfo.icon} {statusInfo.label}
+              </Badge>
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={onClose}>
               <X className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-
-        {/* Invoice Form */}
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-            {/* Basic Information */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="invoiceNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Invoice Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={!isEditing} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="poNumber"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>PO Number</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={!isEditing} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Invoice Date</Label>
-                <Input
-                  type="date"
-                  value={formatDate(invoice.invoiceDate)}
-                  disabled={!isEditing}
-                />
-              </div>
-              <div>
-                <Label>Due Date</Label>
-                <Input
-                  type="date"
-                  value={invoice.dueDate ? formatDate(invoice.dueDate) : ""}
-                  disabled={!isEditing}
-                />
-              </div>
-            </div>
-
-            {/* Vendor Information */}
-            <Card>
-              <CardContent className="p-4 bg-muted/30">
-                <h3 className="text-sm font-medium text-foreground mb-3">
-                  Vendor Information
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField
-                    control={form.control}
-                    name="vendorName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Vendor Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={!isEditing} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="vendorId"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Vendor ID</FormLabel>
-                        <FormControl>
-                          <Input {...field} disabled={!isEditing} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
+        </CardHeader>
+        <CardContent>
+          {isEditing ? (
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="invoiceNumber">Invoice Number</Label>
+                  <Input
+                    id="invoiceNumber"
+                    {...form.register("invoiceNumber")}
+                    className="mt-1"
                   />
                 </div>
-              </CardContent>
-            </Card>
+                <div>
+                  <Label htmlFor="poNumber">PO Number</Label>
+                  <Input
+                    id="poNumber"
+                    {...form.register("poNumber")}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
 
-            {/* Financial Information */}
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="subtotal"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Subtotal</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={!isEditing} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="taxAmount"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Tax Amount</FormLabel>
-                    <FormControl>
-                      <Input {...field} disabled={!isEditing} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="vendorName">Vendor Name</Label>
+                  <Input
+                    id="vendorName"
+                    {...form.register("vendorName")}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="vendorId">Vendor ID</Label>
+                  <Input
+                    id="vendorId"
+                    {...form.register("vendorId")}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
 
-            <FormField
-              control={form.control}
-              name="totalAmount"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Total Amount</FormLabel>
-                  <FormControl>
-                    <Input
-                      {...field}
-                      disabled={!isEditing}
-                      className="border-2 brand-border-500 font-semibold text-lg"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="invoiceDate">Invoice Date</Label>
+                  <Input
+                    id="invoiceDate"
+                    type="date"
+                    {...form.register("invoiceDate")}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="dueDate">Due Date</Label>
+                  <Input
+                    id="dueDate"
+                    type="date"
+                    {...form.register("dueDate")}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
 
-            {/* PO Matching Status */}
-            {invoice.poAmount && (
-              <Card>
-                <CardContent
-                  className={`p-4 ${
-                    invoice.status === "review_needed"
-                      ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800/30"
-                      : invoice.status === "matched"
-                      ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/30"
-                      : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/30"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-medium text-foreground">
-                      PO Matching Status
-                    </h3>
-                    <span
-                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusInfo.color}`}
-                    >
-                      <i className={`${statusInfo.icon} mr-1`}></i>
-                      {discrepancy !== 0 ? "Discrepancy Detected" : "Matched"}
-                    </span>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">PO Amount:</span>
-                      <span className="font-medium text-foreground">
-                        {formatCurrency(invoice.poAmount)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Invoice Amount:</span>
-                      <span className="font-medium text-foreground">
-                        {formatCurrency(invoice.totalAmount)}
-                      </span>
-                    </div>
-                    {discrepancy !== 0 && (
-                      <div className="flex justify-between text-yellow-700 dark:text-yellow-400">
-                        <span className="font-medium">Difference:</span>
-                        <span className="font-semibold">
-                          {discrepancy > 0 ? "+" : ""}
-                          {formatCurrency(Math.abs(discrepancy))}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="subtotal">Subtotal</Label>
+                  <Input
+                    id="subtotal"
+                    {...form.register("subtotal")}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="taxAmount">Tax Amount</Label>
+                  <Input
+                    id="taxAmount"
+                    {...form.register("taxAmount")}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="totalAmount">Total Amount</Label>
+                  <Input
+                    id="totalAmount"
+                    {...form.register("totalAmount")}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
 
-            {/* Line Items */}
-            {invoice.lineItems && invoice.lineItems.length > 0 && (
               <div>
-                <h3 className="text-sm font-medium text-foreground mb-3">Line Items</h3>
-                <Card>
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  {...form.register("notes")}
+                  className="mt-1"
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  type="submit"
+                  disabled={updateMutation.isPending}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  {updateMutation.isPending ? "Saving..." : "Save Changes"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditing(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Invoice Number
+                  </Label>
+                  <p className="mt-1">{invoice.invoiceNumber}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    PO Number
+                  </Label>
+                  <p className="mt-1">{invoice.poNumber || "Not assigned"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Vendor Name
+                  </Label>
+                  <p className="mt-1">{invoice.vendorName}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Vendor ID
+                  </Label>
+                  <p className="mt-1">{invoice.vendorId || "N/A"}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Invoice Date
+                  </Label>
+                  <p className="mt-1">
+                    {new Date(invoice.invoiceDate).toLocaleDateString()}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Due Date
+                  </Label>
+                  <p className="mt-1">
+                    {new Date(invoice.dueDate).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+
+              {/* Financial Information */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Subtotal
+                  </Label>
+                  <p className="mt-1 font-semibold">${invoice.subtotal}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Tax Amount
+                  </Label>
+                  <p className="mt-1 font-semibold">${invoice.taxAmount}</p>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Total Amount
+                  </Label>
+                  <p className="mt-1 font-semibold text-lg">${invoice.totalAmount}</p>
+                </div>
+              </div>
+
+              {invoice.poAmount && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    PO Amount
+                  </Label>
+                  <p className="mt-1 font-semibold">${invoice.poAmount}</p>
+                </div>
+              )}
+
+              {/* Line Items */}
+              {invoice.lineItems && invoice.lineItems.length > 0 && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">
+                    Line Items
+                  </Label>
                   <Table>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead className="text-right">Unit Price</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead>Qty</TableHead>
+                        <TableHead>Unit Price</TableHead>
+                        <TableHead>Total</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {invoice.lineItems.map((item, index) => (
                         <TableRow key={index}>
                           <TableCell>{item.description}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(item.unitPrice)}
-                          </TableCell>
-                          <TableCell className="text-right font-medium">
-                            {formatCurrency(item.total)}
-                          </TableCell>
+                          <TableCell>{item.quantity}</TableCell>
+                          <TableCell>${item.unitPrice}</TableCell>
+                          <TableCell>${item.total}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
                   </Table>
-                </Card>
-              </div>
-            )}
-
-            {/* Notes */}
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Processing Notes</FormLabel>
-                  <FormControl>
-                    <Textarea
-                      {...field}
-                      rows={3}
-                      placeholder="Add any notes about this invoice..."
-                      disabled={!isEditing}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+                </div>
               )}
-            />
 
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-6 border-t border-border">
-              <div className="flex items-center space-x-3">
-                {isEditing && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={() => {
-                      setIsEditing(false);
-                      form.reset();
-                    }}
-                  >
-                    Discard Changes
-                  </Button>
-                )}
-              </div>
-              <div className="flex items-center space-x-3">
+              {invoice.notes && (
+                <div>
+                  <Label className="text-sm font-medium text-muted-foreground">
+                    Notes
+                  </Label>
+                  <p className="mt-1 text-sm">{invoice.notes}</p>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-4 border-t">
                 <Button
-                  type="button"
+                  onClick={() => setIsEditing(true)}
                   variant="outline"
-                  onClick={() => reprocessMutation.mutate()}
-                  disabled={reprocessMutation.isPending}
+                  className="flex items-center gap-2"
                 >
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Reprocess
+                  <Edit className="h-4 w-4" />
+                  Edit
                 </Button>
-                {!isEditing ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setIsEditing(true)}
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
-                ) : (
-                  <Button
-                    type="submit"
-                    className="brand-bg-500 hover:brand-bg-600"
-                    disabled={updateMutation.isPending}
-                  >
-                    <Save className="h-4 w-4 mr-2" />
-                    Save Changes
-                  </Button>
-                )}
+                <Button
+                  onClick={() => reprocessMutation.mutate()}
+                  variant="outline"
+                  disabled={reprocessMutation.isPending}
+                  className="flex items-center gap-2"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  {reprocessMutation.isPending ? "Processing..." : "Reprocess"}
+                </Button>
               </div>
             </div>
-          </form>
-        </Form>
-      </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

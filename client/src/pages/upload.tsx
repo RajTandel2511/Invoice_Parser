@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CloudUpload, FileText, CheckCircle } from "lucide-react";
-import { apiRequest } from "@/lib/queryClient";
+import { mockApiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -16,9 +16,6 @@ export default function Upload() {
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-
       // Simulate upload progress
       setUploadProgress(0);
       const progressInterval = setInterval(() => {
@@ -31,14 +28,14 @@ export default function Upload() {
         });
       }, 200);
 
-      const response = await apiRequest("POST", "/api/upload", formData);
+      const response = await mockApiRequest.uploadInvoice(file);
       clearInterval(progressInterval);
       setUploadProgress(100);
 
       // Clear progress after a delay
       setTimeout(() => setUploadProgress(0), 1000);
 
-      return response.json();
+      return response;
     },
     onSuccess: (data, file) => {
       toast({
@@ -60,9 +57,10 @@ export default function Upload() {
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      acceptedFiles.forEach(file => {
+      const file = acceptedFiles[0];
+      if (file) {
         uploadMutation.mutate(file);
-      });
+      }
     },
     [uploadMutation]
   );
@@ -75,90 +73,85 @@ export default function Upload() {
       "image/jpeg": [".jpg", ".jpeg"],
     },
     maxSize: 10 * 1024 * 1024, // 10MB
-    multiple: true,
+    multiple: false,
   });
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
-      <div className="mb-8">
-        <h1 className="text-3xl font-semibold text-foreground tracking-tight">
-          Upload Invoices
-        </h1>
-        <p className="text-muted-foreground mt-2">
-          Upload your invoice files for automated processing and PO matching
-        </p>
-      </div>
+    <div className="container mx-auto p-6">
+      <div className="max-w-2xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Upload Invoices</h1>
+          <p className="text-muted-foreground">
+            Upload PDF, PNG, or JPG files to process invoices automatically.
+          </p>
+        </div>
 
-      {/* Main Upload Card */}
-      <Card className="mb-8 shadow-sm border-border">
-        <CardContent className="p-12">
-          <div
-            {...getRootProps()}
-            className={`border-2 border-dashed rounded-xl p-16 text-center transition-all duration-200 cursor-pointer ${
-              isDragActive
-                ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/50 hover:bg-muted/30"
-            }`}
-          >
-            <input {...getInputProps()} />
-            <div className="mx-auto w-20 h-20 bg-muted rounded-xl flex items-center justify-center mb-8">
-              <CloudUpload className={`h-10 w-10 ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`} />
+        <Card>
+          <CardContent className="p-6">
+            <div
+              {...getRootProps()}
+              className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                isDragActive
+                  ? "border-primary bg-primary/5"
+                  : "border-muted-foreground/25 hover:border-primary/50"
+              }`}
+            >
+              <input {...getInputProps()} />
+              <CloudUpload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">
+                {isDragActive ? "Drop files here" : "Drag & drop files here"}
+              </h3>
+              <p className="text-muted-foreground mb-4">
+                or click to select files
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Supports PDF, PNG, JPG (max 10MB)
+              </p>
             </div>
-            <h3 className="text-2xl font-semibold text-foreground mb-4">
-              {isDragActive
-                ? "Drop the files here..."
-                : "Drag and drop your invoice files here"}
-            </h3>
-            {!isDragActive && (
-              <div className="space-y-4">
-                <p className="text-muted-foreground text-lg">or</p>
-                <Button size="lg" className="bg-primary hover:bg-primary/90">
-                  Browse Files
-                </Button>
+
+            {uploadProgress > 0 && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium">Processing...</span>
+                  <span className="text-sm text-muted-foreground">
+                    {uploadProgress}%
+                  </span>
+                </div>
+                <Progress value={uploadProgress} className="w-full" />
               </div>
             )}
-            <p className="text-muted-foreground mt-6">
-              Supports PDF, PNG, JPG • Maximum 10MB per file • Multiple files allowed
-            </p>
-          </div>
 
-          {/* Upload Progress */}
-          {uploadProgress > 0 && (
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-medium text-foreground">Uploading...</span>
-                <span className="text-sm text-muted-foreground">{uploadProgress}%</span>
-              </div>
-              <Progress value={uploadProgress} className="h-3" />
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Recently Uploaded Files */}
-      {uploadedFiles.length > 0 && (
-        <Card className="shadow-sm border-border">
-          <CardContent className="p-8">
-            <h3 className="text-xl font-semibold text-foreground mb-6">
-              Recently Uploaded Files
-            </h3>
-            <div className="space-y-3">
-              {uploadedFiles.map((filename, index) => (
-                <div key={index} className="flex items-center space-x-4 p-4 border border-border rounded-xl">
-                  <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                    <FileText className="h-6 w-6 text-green-600" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{filename}</p>
-                    <p className="text-sm text-muted-foreground">Processing completed</p>
-                  </div>
-                  <CheckCircle className="h-5 w-5 text-green-600" />
+            {uploadMutation.isPending && (
+              <div className="mt-4 text-center">
+                <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  Processing invoice...
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
-      )}
+
+        {uploadedFiles.length > 0 && (
+          <Card className="mt-6">
+            <CardContent className="p-6">
+              <h3 className="text-lg font-semibold mb-4">Recently Uploaded</h3>
+              <div className="space-y-2">
+                {uploadedFiles.map((filename, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg"
+                  >
+                    <CheckCircle className="h-5 w-5 text-green-500" />
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm">{filename}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }

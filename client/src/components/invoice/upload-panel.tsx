@@ -1,13 +1,14 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
-import { useMutation } from "@tanstack/react-query";
-import { CloudUpload } from "lucide-react";
-import { type Invoice } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CloudUpload, FileText, CheckCircle, X } from "lucide-react";
+import { mockApiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import InvoiceListItem from "./invoice-list-item";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { type Invoice } from "@shared/schema";
 
 interface UploadPanelProps {
   invoices: Invoice[];
@@ -26,12 +27,10 @@ export default function UploadPanel({
 }: UploadPanelProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      const formData = new FormData();
-      formData.append("file", file);
-
       // Simulate upload progress
       setUploadProgress(0);
       const progressInterval = setInterval(() => {
@@ -44,14 +43,14 @@ export default function UploadPanel({
         });
       }, 200);
 
-      const response = await apiRequest("POST", "/api/upload", formData);
+      const response = await mockApiRequest.uploadInvoice(file);
       clearInterval(progressInterval);
       setUploadProgress(100);
 
       // Clear progress after a delay
       setTimeout(() => setUploadProgress(0), 1000);
 
-      return response.json();
+      return response;
     },
     onSuccess: (data) => {
       toast({
@@ -91,90 +90,119 @@ export default function UploadPanel({
     multiple: false,
   });
 
-  return (
-    <div className="w-1/2 p-8 overflow-y-auto">
-      {/* Upload Section */}
-      <Card className="mb-8 shadow-sm border-border">
-        <CardContent className="p-8">
-          <h2 className="text-xl font-semibold text-foreground mb-6">Upload Invoice</h2>
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "matched":
+        return <Badge className="bg-green-100 text-green-800">Matched</Badge>;
+      case "review_needed":
+        return <Badge className="bg-yellow-100 text-yellow-800">Review Needed</Badge>;
+      case "processing":
+        return <Badge className="bg-blue-100 text-blue-800">Processing</Badge>;
+      default:
+        return <Badge variant="secondary">{status}</Badge>;
+    }
+  };
 
-          {/* Drag and Drop Area */}
+  return (
+    <div className="flex flex-col h-full">
+      {/* Upload Area */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CloudUpload className="h-5 w-5" />
+            Upload Invoice
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           <div
             {...getRootProps()}
-            className={`border-2 border-dashed rounded-xl p-12 text-center transition-all duration-200 cursor-pointer ${
+            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-colors ${
               isDragActive
                 ? "border-primary bg-primary/5"
-                : "border-border hover:border-primary/50 hover:bg-muted/30"
+                : "border-muted-foreground/25 hover:border-primary/50"
             }`}
           >
             <input {...getInputProps()} />
-            <div className="mx-auto w-16 h-16 bg-muted rounded-xl flex items-center justify-center mb-6">
-              <CloudUpload className={`h-8 w-8 ${isDragActive ? 'text-primary' : 'text-muted-foreground'}`} />
-            </div>
-            <p className="text-foreground mb-2 text-lg font-medium">
-              {isDragActive
-                ? "Drop the file here..."
-                : "Drag and drop your invoice files here"}
+            <CloudUpload className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground">
+              {isDragActive ? "Drop files here" : "Drag & drop or click to upload"}
             </p>
-            {!isDragActive && (
-              <div className="space-y-2">
-                <p className="text-muted-foreground">or</p>
-                <button className="text-primary font-medium hover:text-primary/80 transition-colors">
-                  browse files
-                </button>
-              </div>
-            )}
-            <p className="text-sm text-muted-foreground mt-4">
-              Supports PDF, PNG, JPG (max 10MB)
+            <p className="text-xs text-muted-foreground mt-1">
+              PDF, PNG, JPG (max 10MB)
             </p>
           </div>
 
-          {/* Upload Progress */}
           {uploadProgress > 0 && (
-            <div className="mt-6">
-              <Progress value={uploadProgress} className="h-3" />
-              <p className="text-sm text-muted-foreground mt-3">
-                Uploading... {uploadProgress}%
-              </p>
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Processing...</span>
+                <span className="text-sm text-muted-foreground">
+                  {uploadProgress}%
+                </span>
+              </div>
+              <Progress value={uploadProgress} className="w-full" />
+            </div>
+          )}
+
+          {uploadMutation.isPending && (
+            <div className="mt-4 text-center">
+              <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                Processing invoice...
+              </div>
             </div>
           )}
         </CardContent>
       </Card>
 
-      {/* Recent Invoices */}
-      <Card className="shadow-sm border-border">
-        <CardContent className="p-8">
-          <h2 className="text-xl font-semibold text-foreground mb-6">Recent Invoices</h2>
-
+      {/* Invoice List */}
+      <Card className="flex-1">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <FileText className="h-5 w-5" />
+            Invoices ({invoices.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
           {isLoading ? (
-            <div className="space-y-3">
-              {[...Array(3)].map((_, i) => (
-                <div key={i} className="animate-pulse">
-                  <div className="flex items-center justify-between p-3 border border-border rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-muted rounded-lg"></div>
-                      <div>
-                        <div className="h-4 bg-muted rounded w-24 mb-1"></div>
-                        <div className="h-3 bg-muted rounded w-16"></div>
-                      </div>
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-2 text-sm text-muted-foreground">Loading invoices...</p>
+            </div>
+          ) : invoices.length === 0 ? (
+            <div className="text-center py-8">
+              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-sm text-muted-foreground">No invoices uploaded yet</p>
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {invoices.map((invoice) => (
+                <div
+                  key={invoice.id}
+                  className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                    selectedInvoiceId === invoice.id
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:border-primary/50"
+                  }`}
+                  onClick={() => onInvoiceSelect(invoice.id)}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm truncate">
+                        {invoice.invoiceNumber}
+                      </h4>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {invoice.vendorName}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        ${invoice.totalAmount}
+                      </p>
                     </div>
-                    <div className="text-right">
-                      <div className="h-4 bg-muted rounded w-16 mb-1"></div>
-                      <div className="h-3 bg-muted rounded w-12"></div>
+                    <div className="flex items-center gap-2 ml-2">
+                      {getStatusBadge(invoice.status)}
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {invoices.map((invoice) => (
-                <InvoiceListItem
-                  key={invoice.id}
-                  invoice={invoice}
-                  isSelected={invoice.id === selectedInvoiceId}
-                  onSelect={() => onInvoiceSelect(invoice.id)}
-                />
               ))}
             </div>
           )}

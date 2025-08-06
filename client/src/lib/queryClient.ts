@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { mockApi } from "./mockApi";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
@@ -40,6 +41,44 @@ export const getQueryFn: <T>(options: {
     await throwIfResNotOk(res);
     return await res.json();
   };
+
+// Mock API functions for frontend-only development
+export const mockApiRequest = {
+  // Get all invoices
+  async getInvoices() {
+    return await mockApi.getInvoices();
+  },
+
+  // Get single invoice
+  async getInvoice(id: string) {
+    return await mockApi.getInvoice(id);
+  },
+
+  // Upload invoice
+  async uploadInvoice(file: File) {
+    return await mockApi.uploadInvoice(file);
+  },
+
+  // Update invoice
+  async updateInvoice(id: string, data: any) {
+    return await mockApi.updateInvoice(id, data);
+  },
+
+  // Match PO
+  async matchPO(invoiceId: string, poNumber: string) {
+    return await mockApi.matchPO(invoiceId, poNumber);
+  },
+
+  // Reprocess invoice
+  async reprocessInvoice(id: string) {
+    return await mockApi.reprocessInvoice(id);
+  },
+
+  // Delete invoice
+  async deleteInvoice(id: string) {
+    return await mockApi.deleteInvoice(id);
+  }
+};
 
 export const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,36 +1,4 @@
-import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-
-export const invoices = pgTable("invoices", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  invoiceNumber: text("invoice_number").notNull(),
-  poNumber: text("po_number"),
-  vendorName: text("vendor_name").notNull(),
-  vendorId: text("vendor_id"),
-  invoiceDate: timestamp("invoice_date").notNull(),
-  dueDate: timestamp("due_date"),
-  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
-  taxAmount: decimal("tax_amount", { precision: 10, scale: 2 }).notNull(),
-  totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
-  poAmount: decimal("po_amount", { precision: 10, scale: 2 }),
-  status: text("status").notNull().default("pending"), // pending, matched, review_needed, not_matched
-  lineItems: jsonb("line_items").$type<LineItem[]>().notNull().default([]),
-  notes: text("notes"),
-  filename: text("filename"),
-  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`now()`).notNull(),
-});
-
-export const insertInvoiceSchema = createInsertSchema(invoices).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
-export type Invoice = typeof invoices.$inferSelect;
 
 export interface LineItem {
   description: string;
@@ -38,6 +6,40 @@ export interface LineItem {
   unitPrice: number;
   total: number;
 }
+
+export const lineItemSchema = z.object({
+  description: z.string(),
+  quantity: z.number(),
+  unitPrice: z.number(),
+  total: z.number(),
+});
+
+export const insertInvoiceSchema = z.object({
+  invoiceNumber: z.string(),
+  poNumber: z.string().optional(),
+  vendorName: z.string(),
+  vendorId: z.string().optional(),
+  invoiceDate: z.date(),
+  dueDate: z.date().optional(),
+  subtotal: z.string(),
+  taxAmount: z.string(),
+  totalAmount: z.string(),
+  poAmount: z.string().optional(),
+  status: z.enum(["pending", "matched", "review_needed", "not_matched", "processing"]).default("pending"),
+  lineItems: z.array(lineItemSchema).default([]),
+  notes: z.string().optional(),
+  filename: z.string().optional(),
+});
+
+export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
+
+export const invoiceSchema = insertInvoiceSchema.extend({
+  id: z.string(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
+});
+
+export type Invoice = z.infer<typeof invoiceSchema>;
 
 export const uploadResponseSchema = z.object({
   success: z.boolean(),
@@ -47,16 +49,16 @@ export const uploadResponseSchema = z.object({
 
 export type UploadResponse = z.infer<typeof uploadResponseSchema>;
 
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
-  password: text("password").notNull(),
+export const userSchema = z.object({
+  id: z.string(),
+  username: z.string(),
+  password: z.string(),
 });
 
-export const insertUserSchema = createInsertSchema(users).pick({
+export const insertUserSchema = userSchema.pick({
   username: true,
   password: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
+export type User = z.infer<typeof userSchema>;

@@ -1,0 +1,7 @@
+TXT_File,Vendor_Code,Vendor_Name,Vendor_Contact,Vendor_Address,Address_Match_Score,Matched_Contact,Matched_By
+106271 SSFLUM.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce 
+South San Francisco, CA 94080",100,,address only
+106386 SSFLUM.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce 
+South San Francisco, CA 94080",100,6505885711,contact + address
+106465 SSFLUM.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce 
+South San Francisco, CA 94080",100,6505885711,contact + address

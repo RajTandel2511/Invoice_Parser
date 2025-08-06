@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { type Invoice } from "@shared/schema";
+import { mockApiRequest } from "@/lib/queryClient";
 import UploadPanel from "@/components/invoice/upload-panel";
 import DetailPanel from "@/components/invoice/detail-panel";
 
@@ -9,11 +10,13 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
 
   const { data: invoices = [], isLoading } = useQuery<Invoice[]>({
-    queryKey: ["/api/invoices"],
+    queryKey: ["invoices"],
+    queryFn: mockApiRequest.getInvoices,
   });
 
   const { data: selectedInvoice } = useQuery<Invoice>({
-    queryKey: ["/api/invoices", selectedInvoiceId],
+    queryKey: ["invoice", selectedInvoiceId],
+    queryFn: () => mockApiRequest.getInvoice(selectedInvoiceId!),
     enabled: !!selectedInvoiceId,
   });
 
@@ -23,14 +26,14 @@ export default function Dashboard() {
 
   const handleInvoiceUpload = () => {
     // Refresh the invoices list after upload
-    queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["invoices"] });
   };
 
   const handleInvoiceUpdate = () => {
     // Refresh both the list and the selected invoice
-    queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+    queryClient.invalidateQueries({ queryKey: ["invoices"] });
     if (selectedInvoiceId) {
-      queryClient.invalidateQueries({ queryKey: ["/api/invoices", selectedInvoiceId] });
+      queryClient.invalidateQueries({ queryKey: ["invoice", selectedInvoiceId] });
     }
   };
 
