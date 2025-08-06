@@ -1,6 +1,6 @@
-# InvoiceFlow - Frontend Demo
+# InvoiceFlow - Invoice Processing System
 
-A modern React-based invoice processing dashboard built with TypeScript, Tailwind CSS, and shadcn/ui components. This is a frontend-only demo version with mock data for localhost development.
+A modern React-based invoice processing system with Python backend for OCR and invoice processing. Supports both localhost and network deployment.
 
 ## Features
 
@@ -27,6 +27,7 @@ A modern React-based invoice processing dashboard built with TypeScript, Tailwin
 ### Prerequisites
 
 - Node.js 18+ 
+- Python 3.8+
 - npm or yarn
 
 ### Installation
@@ -40,11 +41,17 @@ A modern React-based invoice processing dashboard built with TypeScript, Tailwin
 2. **Install dependencies**
    ```bash
    npm install
+   pip install -r requirements.txt
    ```
 
-3. **Start the development server**
+3. **Start the development servers**
    ```bash
-   npm run dev
+   npm run dev-all
+   ```
+   
+   Or use the network-ready startup script:
+   ```bash
+   start-network.bat
    ```
 
 4. **Open your browser**
@@ -53,7 +60,9 @@ A modern React-based invoice processing dashboard built with TypeScript, Tailwin
 
 ### Available Scripts
 
-- `npm run dev` - Start development server
+- `npm run dev` - Start frontend development server
+- `npm run server` - Start backend API server
+- `npm run dev-all` - Start both frontend and backend servers
 - `npm run build` - Build for production
 - `npm run preview` - Preview production build
 - `npm run check` - Type check with TypeScript
@@ -73,15 +82,20 @@ InvoiceFlow/
 │   │   ├── hooks/         # Custom React hooks
 │   │   └── lib/           # Utilities and configurations
 │   └── index.html
+├── process/               # Python invoice processing pipeline
+│   ├── notebooks/         # Python scripts for OCR and processing
+│   ├── data/             # Reference files and data
+│   └── outputs/          # Generated Excel and text files
 ├── shared/               # Shared TypeScript types
-└── uploads/              # File upload directory (for demo)
+├── uploads/              # File upload directory
+└── server.js             # Express.js backend API server
 ```
 
 ## Features Overview
 
 ### Dashboard
 - Upload new invoices with drag & drop
-- View all invoices with mock data
+- View all invoices with real processing
 - Edit invoice details inline
 - Status tracking (Matched, Review Needed, Processing)
 
@@ -90,6 +104,14 @@ InvoiceFlow/
 - Support for PDF, PNG, JPG files
 - Progress tracking during upload
 - File size validation (10MB per file)
+- Real OCR processing with Python backend
+
+### Invoice Processing
+- OCR text extraction from PDFs
+- AI-powered invoice data extraction
+- Purchase order number detection
+- Automatic vendor matching
+- Excel file generation for Spectrum import
 
 ### PO Matching
 - Match invoices with purchase orders
@@ -102,23 +124,27 @@ InvoiceFlow/
 - Reprocess invoices
 - Line item management
 
-## Mock Data
+## Network Access
 
-The application uses mock data to simulate a real invoice processing system:
+The application supports both local and network deployment:
 
-- **Sample Invoices**: Pre-loaded with 3 example invoices
-- **Upload Simulation**: Simulates file processing with delays
-- **PO Matching**: Simulates matching logic with random results
-- **Status Updates**: Tracks invoice processing status
+### Local Access
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:3002
+
+### Network Access
+- **Frontend**: http://192.168.1.71:3000 or http://192.168.1.130:3000
+- **Backend API**: http://192.168.1.71:3002 or http://192.168.1.130:3002
 
 ## Development
 
-This is a frontend-only demo application. All data is stored in memory and resets when you refresh the page. The mock API simulates real API calls with appropriate delays and responses.
+This is a full-stack application with React frontend and Python backend for invoice processing.
 
 ### Key Components
 
-- **Mock API**: `client/src/lib/mockApi.ts` - Handles all data operations
-- **Query Client**: `client/src/lib/queryClient.ts` - Manages API calls and caching
+- **Frontend API**: `client/src/lib/api.ts` - Handles API calls to backend
+- **Backend Server**: `server.js` - Express.js API server
+- **Python Pipeline**: `process/notebooks/invoice_pipeline_combined.py` - OCR and processing
 - **Components**: Modular React components with TypeScript
 - **Styling**: Tailwind CSS with shadcn/ui design system
 

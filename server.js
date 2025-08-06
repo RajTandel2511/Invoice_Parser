@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 
 const app = express();
-const PORT = 3001;
+const PORT = 3002;
 
 // Enable CORS for frontend
 app.use(cors());
@@ -341,6 +341,9 @@ app.post('/api/process-invoices', async (req, res) => {
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server running on:`);
+  console.log(`  Local: http://localhost:${PORT}`);
+  console.log(`  Network: http://192.168.1.71:${PORT}`);
+  console.log(`  Network: http://192.168.1.130:${PORT}`);
   console.log(`Uploads directory: ${uploadsDir}`);
 }); 

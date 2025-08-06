@@ -10,8 +10,8 @@
     "check": "tsc",
     "server": "node server.js",
     "start": "start.bat",
-    "start-all": "concurrently \"npm run server\" \"cd client && npm run dev\"",
-    "dev-all": "concurrently \"npm run server\" \"cd client && npm run dev\""
+    "start-all": "concurrently \"npm run server\" \"npm run dev\"",
+    "dev-all": "concurrently \"npm run server\" \"npm run dev\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

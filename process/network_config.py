@@ -9,7 +9,8 @@ NETWORK_CONFIG = {
     "projects_share": "Projects", 
     "projects_folder": "Raj",
     "enable_network": True,
-    "local_fallback": "data/network_fallback/"
+    "local_fallback": "data/network_fallback/",
+    "network_ips": ["192.168.1.71", "192.168.1.130"]
 }
 
 def get_network_path():
@@ -23,6 +24,16 @@ def get_local_fallback():
 def is_network_enabled():
     """Check if network access is enabled"""
     return NETWORK_CONFIG.get("enable_network", True)
+
+def is_on_network():
+    """Check if current machine is on the network"""
+    import socket
+    try:
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        return any(ip in local_ip for ip in NETWORK_CONFIG.get("network_ips", []))
+    except:
+        return False
 
 def test_network_connectivity():
     """Test if network path is accessible"""
