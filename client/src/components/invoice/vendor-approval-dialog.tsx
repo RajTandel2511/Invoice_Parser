@@ -149,8 +149,8 @@ export default function VendorApprovalDialog({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={() => {}}>
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-green-600" />
@@ -159,8 +159,19 @@ export default function VendorApprovalDialog({
           <DialogDescription>
             Processing has been paused. Review and edit the automatically matched vendors for your invoices. 
             You can modify the Vendor Code and Vendor Name fields if needed. Processing will continue after you approve the matches.
+            <strong>Note: You must click "Approve All" or "Cancel" to continue processing.</strong>
           </DialogDescription>
         </DialogHeader>
+
+        {/* Warning Banner */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-yellow-600" />
+            <span className="text-sm text-yellow-800 font-medium">
+              Processing is paused. You must approve or cancel to continue.
+            </span>
+          </div>
+        </div>
 
         <div className="space-y-4">
           {/* Vendor Matches List */}

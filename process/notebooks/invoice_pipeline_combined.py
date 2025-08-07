@@ -1029,6 +1029,11 @@ def wait_for_po_approval():
 # Wait for PO approval
 wait_for_po_approval()
 
+# IMPORTANT: Re-read the PO CSV file to get the updated PO information
+print("SUCCESS: Reading updated PO information from CSV file...")
+updated_pixtral_df = pd.read_csv("outputs/excel_files/pixtral_po_results.csv")
+print(f"SUCCESS: Loaded {len(updated_pixtral_df)} updated PO matches from CSV")
+
 import pandas as pd
 import json
 import os
@@ -1042,7 +1047,8 @@ json_folder = "data/processed"
 vendor_df = pd.read_csv(vendor_csv_path)
 vendor_df["Vendor_Code"] = vendor_df["Vendor_Code"].astype(str).str.strip()
 
-pixtral_df = pd.read_csv(pixtral_csv_path)
+# Use the updated PO data instead of the original
+pixtral_df = updated_pixtral_df
 pixtral_df["file_base"] = pixtral_df["file_name"].apply(lambda x: os.path.splitext(x)[0])
 
 # === Process each JSON in the folder ===

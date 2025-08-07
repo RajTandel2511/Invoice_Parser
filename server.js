@@ -1011,6 +1011,70 @@ app.post('/api/approve-po-matches', async (req, res) => {
     
     console.log('Approved PO matches:', approvedMatches);
     
+    // Update the pixtral_po_results.csv file with edited data
+    const poResultsPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'pixtral_po_results.csv');
+    
+    if (fs.existsSync(poResultsPath)) {
+      // Read the current CSV file
+      const csvContent = fs.readFileSync(poResultsPath, 'utf8');
+      const lines = csvContent.split('\n');
+      const headers = lines[0].split(',').map(h => h.trim());
+      
+      console.log('PO CSV Headers:', headers);
+      console.log('Number of lines in CSV:', lines.length);
+      
+      // Create a map of file_name to edited data
+      const editedDataMap = new Map();
+      approvedMatches.forEach(match => {
+        if (match.file_name) {
+          editedDataMap.set(match.file_name, {
+            PO_Number: match.PO_Number || '',
+            Job_Number: match.Job_Number || '',
+            WO_Number: match.WO_Number || '',
+            Remarks: match.Remarks || ''
+          });
+        }
+      });
+      
+      console.log('Edited data map:', editedDataMap);
+      
+      // Update the CSV lines with edited data
+      const updatedLines = lines.map((line, index) => {
+        if (index === 0) return line; // Keep header line
+        
+        const values = line.split(',').map(v => v.trim());
+        if (values.length < headers.length) return line; // Skip malformed lines
+        
+        const fileName = values[headers.indexOf('file_name')];
+        if (fileName && editedDataMap.has(fileName)) {
+          const editedData = editedDataMap.get(fileName);
+          console.log(`Updating line for file: ${fileName}`, editedData);
+          
+          // Update the specific columns
+          const updatedValues = [...values];
+          const poNumberIndex = headers.indexOf('PO_Number');
+          const jobNumberIndex = headers.indexOf('Job_Number');
+          const woNumberIndex = headers.indexOf('WO_Number');
+          const remarksIndex = headers.indexOf('Remarks');
+          
+          if (poNumberIndex !== -1) updatedValues[poNumberIndex] = `"${editedData.PO_Number}"`;
+          if (jobNumberIndex !== -1) updatedValues[jobNumberIndex] = `"${editedData.Job_Number}"`;
+          if (woNumberIndex !== -1) updatedValues[woNumberIndex] = `"${editedData.WO_Number}"`;
+          if (remarksIndex !== -1) updatedValues[remarksIndex] = `"${editedData.Remarks}"`;
+          
+          return updatedValues.join(',');
+        }
+        
+        return line;
+      });
+      
+      // Write the updated CSV back to file
+      const updatedCsvContent = updatedLines.join('\n');
+      fs.writeFileSync(poResultsPath, updatedCsvContent, 'utf8');
+      
+      console.log('Updated pixtral_po_results.csv with edited PO data');
+    }
+    
     // Remove the approval flag to indicate approval is complete
     const poApprovalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'po_approval_needed.flag');
     const lastPOContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_po_content_hash.txt');
@@ -1028,7 +1092,7 @@ app.post('/api/approve-po-matches', async (req, res) => {
     
     res.json({
       success: true,
-      message: 'PO matches approved successfully'
+      message: 'PO matches approved and updated successfully'
     });
   } catch (error) {
     console.error('Error approving PO matches:', error);
