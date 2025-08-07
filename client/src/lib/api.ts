@@ -228,6 +228,63 @@ export const api = {
     }
   },
 
+  // Check if PO approval is needed
+  async checkPOApprovalNeeded(): Promise<{ success: boolean; approvalNeeded?: boolean; matches?: any[]; message?: string }> {
+    try {
+      console.log('Checking if PO approval is needed...');
+      
+      const response = await fetch(`${API_BASE_URL}/check-po-approval-needed`);
+      const result = await response.json();
+      
+      console.log('PO approval check response:', result);
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to check PO approval status');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Check PO approval needed error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to check PO approval status'
+      };
+    }
+  },
+
+  // Approve PO matches
+  async approvePOMatches(approvedMatches: any[]): Promise<{ success: boolean; message?: string }> {
+    try {
+      console.log('Sending PO approval request with matches:', approvedMatches);
+      
+      const response = await fetch(`${API_BASE_URL}/approve-po-matches`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ approvedMatches }),
+      });
+
+      console.log('PO approval response status:', response.status);
+      
+      const result = await response.json();
+      
+      console.log('PO approval response data:', result);
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to approve PO matches');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Approve PO matches error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to approve PO matches'
+      };
+    }
+  },
+
   // Download AP invoices file
   async downloadAPInvoices(): Promise<{ success: boolean; message?: string }> {
     try {

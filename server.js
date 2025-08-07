@@ -285,6 +285,17 @@ app.post('/api/process-invoices', async (req, res) => {
       }
     }
     
+    // Clear the last PO content hash to ensure we detect new data
+    const lastPOContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_po_content_hash.txt');
+    if (fs.existsSync(lastPOContentHashPath)) {
+      try {
+        fs.unlinkSync(lastPOContentHashPath);
+        console.log('Cleared last PO content hash for new processing session');
+      } catch (error) {
+        console.error('Error clearing PO content hash:', error);
+      }
+    }
+    
     // Check if uploads directory exists and has files
     if (!fs.existsSync(uploadsDir)) {
       return res.status(400).json({
@@ -718,6 +729,257 @@ app.post('/api/approve-vendors', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to approve vendors'
+    });
+  }
+});
+
+// Check if PO approval is needed
+app.get('/api/check-po-approval-needed', async (req, res) => {
+  try {
+    console.log('Checking if PO approval is needed...');
+    
+    const poApprovalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'po_approval_needed.flag');
+    const csvPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'pixtral_po_results.csv');
+    const lastPOContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_po_content_hash.txt');
+    
+    const poApprovalNeeded = fs.existsSync(poApprovalFlagPath);
+    const csvExists = fs.existsSync(csvPath);
+    
+    console.log('PO Approval flag exists:', poApprovalNeeded);
+    console.log('PO CSV file exists:', csvExists);
+    
+    if (poApprovalNeeded) {
+      console.log('PO Approval flag exists - should show approval dialog');
+    } else {
+      console.log('No PO approval flag - no approval needed');
+      return res.json({
+        success: true,
+        approvalNeeded: false,
+        matches: []
+      });
+    }
+    
+    // Also check if the CSV file has content (not just exists)
+    let csvHasContent = false;
+    let csvModTime = null;
+    let csvContent = '';
+    if (csvExists) {
+      try {
+        const csvStats = fs.statSync(csvPath);
+        csvModTime = csvStats.mtime;
+        csvContent = fs.readFileSync(csvPath, 'utf-8');
+        csvHasContent = csvContent.trim().length > 0;
+        console.log('PO CSV file has content:', csvHasContent);
+        console.log('PO CSV file size:', csvContent.length, 'characters');
+        console.log('PO CSV file modification time:', csvModTime);
+      } catch (error) {
+        console.error('Error reading PO CSV file:', error);
+      }
+    }
+    
+    if (poApprovalNeeded && csvExists && csvHasContent) {
+      // Check if the CSV file was modified recently (within last 2 minutes)
+      const currentTime = new Date();
+      const timeDiffMinutes = (currentTime - csvModTime) / (1000 * 60);
+      const timeDiffSeconds = (currentTime - csvModTime) / 1000;
+      
+      console.log('PO CSV file modification time:', csvModTime);
+      console.log('Time difference (minutes):', timeDiffMinutes);
+      console.log('Time difference (seconds):', timeDiffSeconds);
+      
+      // Only consider it a new approval if the file was modified within the last 2 minutes
+      if (timeDiffMinutes > 2) {
+        console.log('PO CSV file is too old, not showing approval dialog');
+        return res.json({
+          success: true,
+          approvalNeeded: false,
+          matches: []
+        });
+      }
+      
+      // If the file was modified very recently (within last 30 seconds), it's very fresh
+      if (timeDiffSeconds <= 30) {
+        console.log('PO CSV file was modified within last 30 seconds - extremely fresh data!');
+      }
+      
+      // Create a hash of the CSV content to detect if it has actually changed
+      const crypto = await import('crypto');
+      const contentHash = crypto.createHash('md5').update(csvContent).digest('hex');
+      console.log('PO CSV content hash:', contentHash);
+      
+      // Check if we've seen this content before
+      let lastContentHash = '';
+      if (fs.existsSync(lastPOContentHashPath)) {
+        try {
+          lastContentHash = fs.readFileSync(lastPOContentHashPath, 'utf-8').trim();
+          console.log('Last PO content hash:', lastContentHash);
+        } catch (error) {
+          console.error('Error reading last PO content hash:', error);
+        }
+      }
+      
+      // Only show approval if content has changed AND file was modified recently
+      if (contentHash === lastContentHash) {
+        console.log('PO content hash unchanged - not showing approval dialog');
+        return res.json({
+          success: true,
+          approvalNeeded: false,
+          matches: []
+        });
+      }
+      
+      // Save the new content hash for next time
+      try {
+        fs.writeFileSync(lastPOContentHashPath, contentHash);
+        console.log('Saved new PO content hash:', contentHash);
+      } catch (error) {
+        console.error('Error saving PO content hash:', error);
+      }
+      
+      // Read CSV file to get PO matches (we already have the content)
+      
+      if (!csvContent.trim()) {
+        console.log('PO CSV file is empty');
+        return res.json({
+          success: true,
+          approvalNeeded: false,
+          matches: []
+        });
+      }
+
+      // Parse CSV using a simpler approach
+      const matches = [];
+      const lines = csvContent.split('\n').filter(line => line.trim());
+      
+      if (lines.length <= 1) {
+        console.log('PO CSV file has no data rows');
+        return res.json({
+          success: true,
+          approvalNeeded: false,
+          matches: []
+        });
+      }
+
+      // Get headers from first line
+      const headerLine = lines[0];
+      const headers = [];
+      let currentHeader = '';
+      let inQuotes = false;
+      
+      // Parse headers
+      for (let i = 0; i < headerLine.length; i++) {
+        const char = headerLine[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          headers.push(currentHeader.trim());
+          currentHeader = '';
+        } else {
+          currentHeader += char;
+        }
+      }
+      headers.push(currentHeader.trim()); // Add last header
+      
+      console.log('Parsed PO headers:', headers);
+      
+      // Parse data rows
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const values = [];
+        let currentValue = '';
+        let inFieldQuotes = false;
+        
+        // Parse each field
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          
+          if (char === '"') {
+            inFieldQuotes = !inFieldQuotes;
+          } else if (char === ',' && !inFieldQuotes) {
+            values.push(currentValue.trim());
+            currentValue = '';
+          } else {
+            currentValue += char;
+          }
+        }
+        values.push(currentValue.trim()); // Add last value
+        
+        // Create match object
+        const match = {};
+        headers.forEach((header, index) => {
+          let value = values[index] || '';
+          // Remove surrounding quotes if present
+          if (value.startsWith('"') && value.endsWith('"')) {
+            value = value.slice(1, -1);
+          }
+          match[header] = value;
+        });
+        
+        matches.push(match);
+      }
+      
+      console.log('Parsed PO matches:', matches);
+      
+      res.json({
+        success: true,
+        approvalNeeded: true,
+        matches: matches
+      });
+    } else {
+      res.json({
+        success: true,
+        approvalNeeded: false,
+        matches: []
+      });
+    }
+  } catch (error) {
+    console.error('Error checking PO approval needed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check PO approval status'
+    });
+  }
+});
+
+// Approve PO matches
+app.post('/api/approve-po-matches', async (req, res) => {
+  try {
+    console.log('PO approval request received');
+    const { approvedMatches } = req.body;
+    
+    if (!approvedMatches || !Array.isArray(approvedMatches)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid approved PO matches data'
+      });
+    }
+    
+    console.log('Approved PO matches:', approvedMatches);
+    
+    // Remove the approval flag to indicate approval is complete
+    const poApprovalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'po_approval_needed.flag');
+    const lastPOContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_po_content_hash.txt');
+    
+    if (fs.existsSync(poApprovalFlagPath)) {
+      fs.unlinkSync(poApprovalFlagPath);
+      console.log('Removed PO approval flag');
+    }
+    
+    // Clear the content hash to allow fresh data for next processing
+    if (fs.existsSync(lastPOContentHashPath)) {
+      fs.unlinkSync(lastPOContentHashPath);
+      console.log('Cleared PO content hash file');
+    }
+    
+    res.json({
+      success: true,
+      message: 'PO matches approved successfully'
+    });
+  } catch (error) {
+    console.error('Error approving PO matches:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to approve PO matches'
     });
   }
 });

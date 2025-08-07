@@ -516,6 +516,12 @@ if os.path.exists(approval_status_file):
     os.remove(approval_status_file)
     print("SUCCESS: Cleared existing approval status")
 
+# Clear any existing PO approval files at the start of processing
+po_approval_flag_file = "outputs/excel_files/po_approval_needed.flag"
+if os.path.exists(po_approval_flag_file):
+    os.remove(po_approval_flag_file)
+    print("SUCCESS: Cleared existing PO approval flag")
+
 # --- Utility Functions ---
 def normalize_digits(text):
     return re.sub(r'\D+', '', str(text))
@@ -986,6 +992,36 @@ df_po[available_columns].to_csv(output_csv, index=False)
 print("SUCCESS: Final file saved:", output_csv)
 print(f"INFO: Available columns: {available_columns}")
 df_po[available_columns].head()
+
+# Create PO approval flag
+po_approval_flag_file = "outputs/excel_files/po_approval_needed.flag"
+with open(po_approval_flag_file, 'w') as f:
+    f.write("po_approval_needed")
+print("SUCCESS: Created PO approval flag:", po_approval_flag_file)
+
+def wait_for_po_approval():
+    """Wait for user PO approval before continuing"""
+    print("SUCCESS: PO matches created. Waiting for user approval...")
+    
+    # Create PO approval flag
+    with open(po_approval_flag_file, 'w') as f:
+        f.write("po_approval_needed")
+    
+    # Wait for approval
+    while True:
+        try:
+            if not os.path.exists(po_approval_flag_file):
+                print("SUCCESS: PO approval received. Continuing with processing...")
+                return True
+            
+            time.sleep(1)  # Check every second
+            
+        except Exception as e:
+            print(f"Error checking PO approval status: {e}")
+            time.sleep(1)
+
+# Wait for PO approval
+wait_for_po_approval()
 
 import pandas as pd
 import json

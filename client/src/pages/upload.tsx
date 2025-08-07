@@ -10,6 +10,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
 import VendorApprovalDialog from '@/components/invoice/vendor-approval-dialog';
+import POApprovalDialog from '@/components/invoice/po-approval-dialog';
 
 interface UploadedFile {
   filename: string;
@@ -29,6 +30,18 @@ interface VendorMatch {
   Matched_By?: string;
 }
 
+interface POMatch {
+  file_name?: string;
+  extracted_po_number?: string;
+  clean_po_number?: string;
+  PO_Number?: string;
+  Job_Number?: string;
+  WO_Number?: string;
+  Remarks?: string;
+  po_verified_by?: string;
+  job_verified_by?: string;
+}
+
 export default function Upload() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
@@ -40,6 +53,12 @@ export default function Upload() {
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const [lastSeenDataHash, setLastSeenDataHash] = useState<string>('');
   const [isPostApprovalProcessing, setIsPostApprovalProcessing] = useState(false);
+  
+  // PO approval state
+  const [showPOApproval, setShowPOApproval] = useState(false);
+  const [poMatches, setPOMatches] = useState<POMatch[]>([]);
+  const [hasShownPOApprovalDialog, setHasShownPOApprovalDialog] = useState(false);
+  const [lastSeenPODataHash, setLastSeenPODataHash] = useState<string>('');
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -53,6 +72,27 @@ export default function Upload() {
     ).join('|');
     
     console.log('Creating hash from data string:', dataString);
+    
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < dataString.length; i++) {
+      const char = dataString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString();
+  };
+
+  // Function to create a hash of PO matches data to detect changes
+  const createPODataHash = (matches: POMatch[]): string => {
+    if (!matches || matches.length === 0) return '';
+    
+    // Create a hash based on the content of the matches
+    const dataString = matches.map(match => 
+      `${match.file_name}-${match.extracted_po_number}-${match.clean_po_number}-${match.Job_Number}`
+    ).join('|');
+    
+    console.log('Creating PO hash from data string:', dataString);
     
     // Simple hash function
     let hash = 0;
@@ -182,11 +222,15 @@ export default function Upload() {
       // Start processing and show loading animation
       setIsProcessing(true);
       setHasShownApprovalDialog(false); // Reset approval dialog state for new processing
+      setHasShownPOApprovalDialog(false); // Reset PO approval dialog state for new processing
       setProcessingComplete(false); // Reset processing complete state
       setVendorMatches([]); // Clear old vendor matches
-      setShowVendorApproval(false); // Ensure dialog is closed
+      setPOMatches([]); // Clear old PO matches
+      setShowVendorApproval(false); // Ensure vendor dialog is closed
+      setShowPOApproval(false); // Ensure PO dialog is closed
       setProcessingStartTime(Date.now()); // Set processing start time
       setLastSeenDataHash(''); // Reset data hash for new processing
+      setLastSeenPODataHash(''); // Reset PO data hash for new processing
 
       toast({
         title: "Processing Invoices",
@@ -202,14 +246,15 @@ export default function Upload() {
         
                toast({
          title: "Processing Started",
-         description: "Processing has started. Waiting for vendor approval...",
+         description: "Processing has started. Waiting for vendor and PO approval...",
        });
        
-       console.log('🚀 Processing started, beginning to poll for vendor approval...');
+       console.log('🚀 Processing started, beginning to poll for vendor and PO approval...');
        console.log('⏰ Start time:', new Date().toISOString());
        
-       // Start polling for approval needed
+       // Start polling for both vendor and PO approval needed
        pollForApproval();
+       pollForPOApproval();
         
       } else {
         toast({
@@ -308,6 +353,79 @@ export default function Upload() {
         });
       }
     }, 2000); // Poll every 2 seconds instead of 1 second
+  };
+
+  const pollForPOApproval = async () => {
+    const checkPOApproval = async () => {
+      try {
+        console.log('🔍 Checking PO approval needed...');
+        
+        const result = await api.checkPOApprovalNeeded();
+        console.log('📋 PO approval check result:', result);
+        
+        if (result.success && result.approvalNeeded && result.matches && !hasShownPOApprovalDialog) {
+          console.log('✅ PO approval needed detected!');
+          console.log('📊 Number of PO matches found:', result.matches.length);
+          console.log('📅 Current time:', new Date().toISOString());
+          
+          // Show PO approval dialog if backend says approval is needed
+          console.log('🎉 Backend detected PO approval needed!');
+          console.log('🎉 Showing PO approval dialog with matches:', result.matches);
+          console.log('📈 Previous PO matches count:', poMatches.length);
+          
+          // Debug: Log each PO match to see the data structure
+          result.matches.forEach((match, index) => {
+            console.log(`PO Match ${index}:`, match);
+            console.log(`  file_name: "${match.file_name}"`);
+            console.log(`  extracted_po_number: "${match.extracted_po_number}"`);
+            console.log(`  clean_po_number: "${match.clean_po_number}"`);
+            console.log(`  Job_Number: "${match.Job_Number}"`);
+          });
+          
+          setPOMatches(result.matches);
+          setShowPOApproval(true);
+          setHasShownPOApprovalDialog(true); // Mark that we've shown the dialog
+          setIsProcessing(false); // Stop the loading animation when dialog appears
+          return true; // Stop polling
+        }
+        
+        return false; // Continue polling
+      } catch (error) {
+        console.error('Error checking PO approval:', error);
+        return false;
+      }
+    };
+
+    // Poll every 2 seconds for up to 10 minutes
+    let attempts = 0;
+    const maxAttempts = 300; // 10 minutes at 2-second intervals
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        attempts++;
+        const shouldStop = await checkPOApproval();
+        
+        if (shouldStop || attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          setIsProcessing(false); // Stop loading animation on timeout
+          if (attempts >= maxAttempts) {
+            toast({
+              title: "PO Processing Timeout",
+              description: "PO processing is taking longer than expected. Please check the status.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (error) {
+        console.error('PO polling error:', error);
+        clearInterval(pollInterval);
+        toast({
+          title: "PO Polling Error",
+          description: "Error checking PO approval status. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }, 2000); // Poll every 2 seconds
   };
 
   const pollForProcessingCompletion = async () => {
@@ -440,6 +558,57 @@ export default function Upload() {
     }
   };
 
+  const handlePOApproval = async (approvedMatches: POMatch[]) => {
+    try {
+      console.log('🚀 Starting PO approval process...', approvedMatches);
+      console.log('📊 Number of approved PO matches:', approvedMatches.length);
+      
+      // Send approval to backend to resume processing
+      const result = await api.approvePOMatches(approvedMatches);
+      
+      console.log('✅ PO approval API response:', result);
+      
+      if (result.success) {
+        toast({
+          title: "PO Matches Approved",
+          description: `Successfully approved ${approvedMatches.length} PO matches. Processing will continue...`,
+        });
+        
+        console.log('🔄 Keeping loading animation running while processing continues...');
+        
+        // Keep loading animation running while processing continues
+        setIsProcessing(true);
+        setIsPostApprovalProcessing(true); // Mark that we're in post-approval processing
+        
+        // Reset approval dialog state
+        setHasShownPOApprovalDialog(false);
+        setShowPOApproval(false);
+        setPOMatches([]); // Clear PO matches after approval
+        setLastSeenPODataHash(''); // Reset data hash after approval
+        
+        console.log('📡 Starting to poll for processing completion...');
+        
+        // Poll for processing completion
+        pollForProcessingCompletion();
+        
+      } else {
+        console.error('❌ PO approval failed:', result.message);
+        toast({
+          title: "PO Approval Failed",
+          description: result.message || "Failed to approve PO matches",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('💥 Error in handlePOApproval:', error);
+      toast({
+        title: "PO Approval Failed",
+        description: "Failed to approve PO matches",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleDownloadProcessedFiles = async () => {
     try {
       if (!processingComplete) {
@@ -488,16 +657,18 @@ export default function Upload() {
   return (
     <div className="container mx-auto p-6">
              {/* Loading Animation */}
-       <LoadingAnimation 
-         isVisible={isProcessing} 
-         message={
-           showVendorApproval ? 
-             "Processing paused - waiting for vendor approval..." :
-             isPostApprovalProcessing ?
-               "Processing invoices... Please wait while we complete the final steps." :
-               "Processing invoices... Please wait while we extract and analyze your documents."
-         }
-       />
+               <LoadingAnimation 
+          isVisible={isProcessing} 
+          message={
+            showVendorApproval ? 
+              "Processing paused - waiting for vendor approval..." :
+              showPOApproval ?
+                "Processing paused - waiting for PO approval..." :
+              isPostApprovalProcessing ?
+                "Processing invoices... Please wait while we complete the final steps." :
+                "Processing invoices... Please wait while we extract and analyze your documents."
+          }
+        />
       
       {/* Vendor Approval Dialog */}
       <VendorApprovalDialog
@@ -506,6 +677,15 @@ export default function Upload() {
         onClose={() => setShowVendorApproval(false)}
         vendorMatches={vendorMatches}
         onApprove={handleVendorApproval}
+      />
+      
+      {/* PO Approval Dialog */}
+      <POApprovalDialog
+        key={`po-dialog-${processingStartTime}`}
+        isOpen={showPOApproval}
+        onClose={() => setShowPOApproval(false)}
+        poMatches={poMatches}
+        onApprove={handlePOApproval}
       />
       
       <div className="max-w-4xl mx-auto">
