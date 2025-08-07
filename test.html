@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test</title>
+</head>
+<body>
+    <h1>Invoice Parser API Test</h1>
+    
+    <div>
+        <h2>Test Check Approval</h2>
+        <button onclick="testCheckApproval()">Check Approval Status</button>
+        <div id="approvalResult"></div>
+    </div>
+    
+    <div>
+        <h2>Test Approve Vendors</h2>
+        <button onclick="testApproveVendors()">Approve Vendors</button>
+        <div id="approveResult"></div>
+    </div>
+
+    <script>
+        async function testCheckApproval() {
+            try {
+                console.log('Testing check approval...');
+                const response = await fetch('http://localhost:3002/api/check-approval-needed');
+                const result = await response.json();
+                console.log('Check approval result:', result);
+                document.getElementById('approvalResult').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                console.error('Error testing check approval:', error);
+                document.getElementById('approvalResult').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+
+        async function testApproveVendors() {
+            try {
+                console.log('Testing approve vendors...');
+                const testData = {
+                    approvedMatches: [
+                        {
+                            "TXT_File": "test.txt",
+                            "Vendor_Code": "TEST",
+                            "Vendor_Name": "Test Vendor",
+                            "Vendor_Contact": "",
+                            "Vendor_Address": "",
+                            "Address_Match_Score": "0",
+                            "Matched_Contact": "",
+                            "Matched_By": "test"
+                        }
+                    ]
+                };
+                
+                const response = await fetch('http://localhost:3002/api/approve-vendors', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(testData)
+                });
+                
+                const result = await response.json();
+                console.log('Approve vendors result:', result);
+                document.getElementById('approveResult').innerHTML = '<pre>' + JSON.stringify(result, null, 2) + '</pre>';
+            } catch (error) {
+                console.error('Error testing approve vendors:', error);
+                document.getElementById('approveResult').innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>

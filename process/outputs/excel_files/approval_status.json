@@ -1,0 +1,15 @@
+{
+  "approved": true,
+  "approved_matches": [
+    {
+      "TXT_File": "110-s101126669.001 JONSUP_1754579789882.txt",
+      "Vendor_Code": "JONSUP",
+      "Vendor_Name": "Johnstone Supply",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O. Box 23814  Oakland, CA 94623-0814",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    }
+  ]
+}

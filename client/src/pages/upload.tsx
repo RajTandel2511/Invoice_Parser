@@ -1,19 +1,32 @@
-import { useCallback, useState, useEffect } from "react";
-import { useDropzone } from "react-dropzone";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CloudUpload, FileText, Download } from "lucide-react";
-import { api } from "@/lib/api";
-import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Button } from "@/components/ui/button";
-import { LoadingAnimation } from "@/components/LoadingAnimation";
+import React, { useState, useCallback, useEffect } from 'react';
+import { useDropzone } from 'react-dropzone';
+import { CloudUpload, FileText, Download, CheckCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { LoadingAnimation } from '@/components/LoadingAnimation';
+import VendorApprovalDialog from '@/components/invoice/vendor-approval-dialog';
 
 interface UploadedFile {
   filename: string;
   size: number;
-  uploadDate: string;
+  uploadedAt: string;
   path: string;
+}
+
+interface VendorMatch {
+  TXT_File?: string;
+  Vendor_Code?: string;
+  Vendor_Name?: string;
+  Vendor_Contact?: string;
+  Vendor_Address?: string;
+  Address_Match_Score?: string;
+  Matched_Contact?: string;
+  Matched_By?: string;
 }
 
 export default function Upload() {
@@ -21,8 +34,35 @@ export default function Upload() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [processingComplete, setProcessingComplete] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showVendorApproval, setShowVendorApproval] = useState(false);
+  const [vendorMatches, setVendorMatches] = useState<VendorMatch[]>([]);
+  const [hasShownApprovalDialog, setHasShownApprovalDialog] = useState(false);
+  const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
+  const [lastSeenDataHash, setLastSeenDataHash] = useState<string>('');
+  const [isPostApprovalProcessing, setIsPostApprovalProcessing] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Function to create a hash of vendor matches data to detect changes
+  const createDataHash = (matches: VendorMatch[]): string => {
+    if (!matches || matches.length === 0) return '';
+    
+    // Create a hash based on the content of the matches
+    const dataString = matches.map(match => 
+      `${match.TXT_File}-${match.Vendor_Code}-${match.Vendor_Name}-${match.Address_Match_Score}`
+    ).join('|');
+    
+    console.log('Creating hash from data string:', dataString);
+    
+    // Simple hash function
+    let hash = 0;
+    for (let i = 0; i < dataString.length; i++) {
+      const char = dataString.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString();
+  };
 
   // Fetch uploaded files on component mount
   useEffect(() => {
@@ -141,6 +181,12 @@ export default function Upload() {
 
       // Start processing and show loading animation
       setIsProcessing(true);
+      setHasShownApprovalDialog(false); // Reset approval dialog state for new processing
+      setProcessingComplete(false); // Reset processing complete state
+      setVendorMatches([]); // Clear old vendor matches
+      setShowVendorApproval(false); // Ensure dialog is closed
+      setProcessingStartTime(Date.now()); // Set processing start time
+      setLastSeenDataHash(''); // Reset data hash for new processing
 
       toast({
         title: "Processing Invoices",
@@ -151,22 +197,19 @@ export default function Upload() {
       const result = await api.processInvoices();
       
       if (result.success) {
-        toast({
-          title: "Processing Complete!",
-          description: result.message,
-        });
+        // Keep the loading animation running until approval dialog appears
+        // The backend should pause processing and wait for approval
         
-        // Set processing complete state
-        setProcessingComplete(true);
-        
-        // Refresh the uploaded files list after processing
-        const fetchFiles = async () => {
-          const result = await api.getUploadedFiles();
-          if (result.success && result.files) {
-            setUploadedFiles(result.files);
-          }
-        };
-        fetchFiles();
+               toast({
+         title: "Processing Started",
+         description: "Processing has started. Waiting for vendor approval...",
+       });
+       
+       console.log('🚀 Processing started, beginning to poll for vendor approval...');
+       console.log('⏰ Start time:', new Date().toISOString());
+       
+       // Start polling for approval needed
+       pollForApproval();
         
       } else {
         toast({
@@ -174,6 +217,7 @@ export default function Upload() {
           description: result.message,
           variant: "destructive",
         });
+        setIsProcessing(false);
       }
 
     } catch (error) {
@@ -182,9 +226,217 @@ export default function Upload() {
         description: error instanceof Error ? error.message : "Failed to process invoices",
         variant: "destructive",
       });
-    } finally {
-      // Stop the loading animation
       setIsProcessing(false);
+    }
+  };
+
+    const pollForApproval = async () => {
+    const checkApproval = async () => {
+      try {
+        console.log('🔍 Checking approval needed...');
+        
+        // Also check processing status to understand timing
+        const processingStatus = await api.checkProcessingStatus();
+        console.log('⚙️ Processing status:', processingStatus);
+        
+        const result = await api.checkApprovalNeeded();
+        console.log('📋 Approval check result:', result);
+        
+                 if (result.success && result.approvalNeeded && result.matches && !hasShownApprovalDialog) {
+           console.log('✅ Approval needed detected!');
+           console.log('📊 Number of matches found:', result.matches.length);
+           console.log('📅 Current time:', new Date().toISOString());
+           
+           // Show approval dialog if backend says approval is needed
+           // The backend now handles the timing logic properly
+           console.log('🎉 Backend detected approval needed!');
+           console.log('🎉 Showing vendor approval dialog with matches:', result.matches);
+           console.log('📈 Previous vendor matches count:', vendorMatches.length);
+           console.log('⏰ Processing start time:', processingStartTime);
+           console.log('⏰ Current time:', Date.now());
+           
+           // Debug: Log each match to see the data structure
+           result.matches.forEach((match, index) => {
+             console.log(`Match ${index}:`, match);
+             console.log(`  TXT_File: "${match.TXT_File}"`);
+             console.log(`  Vendor_Code: "${match.Vendor_Code}"`);
+             console.log(`  Vendor_Name: "${match.Vendor_Name}"`);
+             console.log(`  Address_Match_Score: "${match.Address_Match_Score}"`);
+           });
+           
+           setVendorMatches(result.matches);
+           setShowVendorApproval(true);
+           setHasShownApprovalDialog(true); // Mark that we've shown the dialog
+           setIsProcessing(false); // Stop the loading animation when dialog appears
+           return true; // Stop polling
+         }
+        
+        return false; // Continue polling
+      } catch (error) {
+        console.error('Error checking approval:', error);
+        return false;
+      }
+    };
+
+    // Poll every 2 seconds for up to 10 minutes (slower polling to be more patient)
+    let attempts = 0;
+    const maxAttempts = 300; // 10 minutes at 2-second intervals
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        attempts++;
+        const shouldStop = await checkApproval();
+        
+        if (shouldStop || attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          setIsProcessing(false); // Stop loading animation on timeout
+          if (attempts >= maxAttempts) {
+            toast({
+              title: "Processing Timeout",
+              description: "Processing is taking longer than expected. Please check the status.",
+              variant: "destructive",
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        clearInterval(pollInterval);
+        toast({
+          title: "Polling Error",
+          description: "Error checking approval status. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }, 2000); // Poll every 2 seconds instead of 1 second
+  };
+
+  const pollForProcessingCompletion = async () => {
+    const checkCompletion = async () => {
+      try {
+        console.log('Checking raw PDFs folder status...');
+        const result = await api.checkRawPdfs();
+        console.log('Raw PDFs check result:', result);
+        
+        if (result.success && result.isEmpty) {
+          // Raw PDFs folder is empty, processing is complete
+          console.log('Raw PDFs folder is empty - processing completed successfully');
+          setProcessingComplete(true);
+          setIsProcessing(false); // Stop the loading animation
+          setIsPostApprovalProcessing(false); // Reset post-approval processing state
+          return true; // Stop polling
+        }
+        
+        // Log current file count for debugging
+        if (result.success) {
+          console.log(`Raw PDFs folder has ${result.fileCount} files remaining`);
+        }
+        
+        return false; // Continue polling
+      } catch (error) {
+        console.error('Error checking raw PDFs folder:', error);
+        return false;
+      }
+    };
+
+    // Poll every 2 seconds for up to 15 minutes
+    let attempts = 0;
+    const maxAttempts = 450; // 15 minutes at 2-second intervals
+    
+    const pollInterval = setInterval(async () => {
+      try {
+        attempts++;
+        const shouldStop = await checkCompletion();
+        
+        if (shouldStop || attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+          setIsProcessing(false); // Stop loading animation
+          if (attempts >= maxAttempts) {
+            toast({
+              title: "Processing Timeout",
+              description: "Processing is taking longer than expected. Please check the status.",
+              variant: "destructive",
+            });
+          } else {
+            // Processing completed successfully
+            toast({
+              title: "Processing Complete",
+              description: "Your invoices have been processed successfully!",
+            });
+            
+            // Refresh the uploaded files list
+            const fetchFiles = async () => {
+              try {
+                const result = await api.getUploadedFiles();
+                if (result.success && result.files) {
+                  setUploadedFiles(result.files);
+                }
+              } catch (error) {
+                console.error('Error fetching files after completion:', error);
+              }
+            };
+            fetchFiles();
+          }
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+        clearInterval(pollInterval);
+        toast({
+          title: "Polling Error",
+          description: "Error checking processing status. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }, 2000); // Poll every 2 seconds
+  };
+
+  const handleVendorApproval = async (approvedMatches: VendorMatch[]) => {
+    try {
+      console.log('🚀 Starting vendor approval process...', approvedMatches);
+      console.log('📊 Number of approved matches:', approvedMatches.length);
+      
+      // Send approval to backend to resume processing
+      const result = await api.approveVendors(approvedMatches);
+      
+      console.log('✅ Approval API response:', result);
+      
+      if (result.success) {
+        toast({
+          title: "Vendor Matches Approved",
+          description: `Successfully approved ${approvedMatches.length} vendor matches. Processing will continue...`,
+        });
+        
+        console.log('🔄 Keeping loading animation running while processing continues...');
+        
+        // Keep loading animation running while processing continues
+        setIsProcessing(true);
+        setIsPostApprovalProcessing(true); // Mark that we're in post-approval processing
+        
+        // Reset approval dialog state
+        setHasShownApprovalDialog(false);
+        setShowVendorApproval(false);
+        setVendorMatches([]); // Clear vendor matches after approval
+        setLastSeenDataHash(''); // Reset data hash after approval
+        
+        console.log('📡 Starting to poll for processing completion...');
+        
+        // Poll for processing completion
+        pollForProcessingCompletion();
+        
+      } else {
+        console.error('❌ Approval failed:', result.message);
+        toast({
+          title: "Approval Failed",
+          description: result.message || "Failed to approve vendor matches",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('💥 Error in handleVendorApproval:', error);
+      toast({
+        title: "Approval Failed",
+        description: "Failed to approve vendor matches",
+        variant: "destructive",
+      });
     }
   };
 
@@ -235,10 +487,25 @@ export default function Upload() {
 
   return (
     <div className="container mx-auto p-6">
-      {/* Loading Animation */}
-      <LoadingAnimation 
-        isVisible={isProcessing} 
-        message="Processing invoices... Please wait while we extract and analyze your documents."
+             {/* Loading Animation */}
+       <LoadingAnimation 
+         isVisible={isProcessing} 
+         message={
+           showVendorApproval ? 
+             "Processing paused - waiting for vendor approval..." :
+             isPostApprovalProcessing ?
+               "Processing invoices... Please wait while we complete the final steps." :
+               "Processing invoices... Please wait while we extract and analyze your documents."
+         }
+       />
+      
+      {/* Vendor Approval Dialog */}
+      <VendorApprovalDialog
+        key={`vendor-dialog-${processingStartTime}`}
+        isOpen={showVendorApproval}
+        onClose={() => setShowVendorApproval(false)}
+        vendorMatches={vendorMatches}
+        onApprove={handleVendorApproval}
       />
       
       <div className="max-w-4xl mx-auto">
@@ -310,12 +577,54 @@ export default function Upload() {
           </Card>
 
           {/* Upload Status */}
-          {uploadMutation.isPending && (
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                  <span className="text-sm">Uploading files...</span>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Uploaded Files ({uploadedFiles.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {uploadedFiles.length === 0 ? (
+                <div className="text-center py-8">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-sm text-muted-foreground">No files uploaded yet</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <div>
+                          <p className="font-medium text-sm">{file.filename}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {(file.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary">
+                        {file.filename.endsWith('.pdf') ? 'PDF' : 'Image'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Processing Status */}
+          {processingComplete && (
+            <Card className="border-green-200 bg-green-50">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <CheckCircle className="h-6 w-6 text-green-600" />
+                  <div>
+                    <h3 className="font-semibold text-green-800">Processing Complete</h3>
+                    <p className="text-sm text-green-700">
+                      Your invoices have been processed successfully. You can now download the processed files.
+                    </p>
+                  </div>
                 </div>
               </CardContent>
             </Card>

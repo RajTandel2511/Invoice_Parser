@@ -1,0 +1,3 @@
+TXT_File,Vendor_Code,Vendor_Name,Vendor_Contact,Vendor_Address,Address_Match_Score,Matched_Contact,Matched_By
+test.txt,AIRSUP,Air Filter Supply,,"P.O Box 1166
+Rancho Cordova, CA 95741",100,,address only

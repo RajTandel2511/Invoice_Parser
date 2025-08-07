@@ -492,6 +492,7 @@ import re
 import json
 import pandas as pd
 from fuzzywuzzy import fuzz
+import time
 
 # --- Load and prepare vendor list ---
 vendor_df = pd.read_csv("data/Vendor_List.csv").dropna(subset=['Vendor_Name'])
@@ -503,6 +504,17 @@ vendor_df["Vendor_Code"] = vendor_df["Vendor_Code"].astype(str).str.strip()
 ocr_txt_folder = "data/OCR_text_Test"
 json_folder = "data/processed"
 output_csv = "outputs/excel_files/matched_vendors_from_txt.csv"
+approval_flag_file = "outputs/excel_files/approval_needed.flag"
+approval_status_file = "outputs/excel_files/approval_status.json"
+
+# Clear any existing approval files at the start of processing
+if os.path.exists(approval_flag_file):
+    os.remove(approval_flag_file)
+    print("SUCCESS: Cleared existing approval flag")
+
+if os.path.exists(approval_status_file):
+    os.remove(approval_status_file)
+    print("SUCCESS: Cleared existing approval status")
 
 # --- Utility Functions ---
 def normalize_digits(text):
@@ -515,6 +527,38 @@ def remove_company_address(text):
     for block in ["535 railroad ave", "535 railroad avenue"]:
         text = text.replace(block, "")
     return text
+
+def wait_for_approval():
+    """Wait for user approval before continuing"""
+    print("SUCCESS: Vendor matches created. Waiting for user approval...")
+    
+    # Create approval flag
+    with open(approval_flag_file, 'w') as f:
+        f.write("approval_needed")
+    
+    # Initialize approval status
+    approval_status = {"approved": False, "approved_matches": []}
+    with open(approval_status_file, 'w') as f:
+        json.dump(approval_status, f)
+    
+    # Wait for approval
+    while True:
+        try:
+            with open(approval_status_file, 'r') as f:
+                status = json.load(f)
+            
+            if status.get("approved", False):
+                print("SUCCESS: Approval received. Continuing with processing...")
+                # Remove approval flag
+                if os.path.exists(approval_flag_file):
+                    os.remove(approval_flag_file)
+                return status.get("approved_matches", [])
+            
+            time.sleep(1)  # Check every second
+            
+        except Exception as e:
+            print(f"Error checking approval status: {e}")
+            time.sleep(1)
 
 # --- Step 1: Match Vendors from .txt using address/contact ---
 final_matches = []
@@ -561,12 +605,30 @@ for txt_file in os.listdir(ocr_txt_folder):
 
 # --- Step 2: Save Matches to CSV ---
 match_df = pd.DataFrame(final_matches)
-match_df.to_csv(output_csv, index=False)
+
+# Clean up addresses to replace newlines with spaces before writing CSV
+if 'Vendor_Address' in match_df.columns:
+    match_df['Vendor_Address'] = match_df['Vendor_Address'].astype(str).str.replace('\n', ' ').str.replace('\r', ' ')
+
+# Write CSV with proper quoting to handle any remaining special characters
+match_df.to_csv(output_csv, index=False, quoting=1)  # quoting=1 means quote all non-numeric fields
 print(f"SUCCESS: Best vendor matches saved to {output_csv}")
 
-# Vendor approval section removed - continuing directly to next step
+# --- Step 3: Wait for User Approval ---
+approved_matches = wait_for_approval()
 
-# --- Step 3: Prepare Vendor Details Lookup ---
+# --- Step 4: Continue with approved matches only ---
+if approved_matches:
+    # Filter matches to only include approved ones
+    approved_txt_files = [match["TXT_File"] for match in approved_matches]
+    final_matches = [match for match in final_matches if match["TXT_File"] in approved_txt_files]
+    
+    print(f"SUCCESS: Processing {len(final_matches)} approved vendor matches...")
+else:
+    print("WARNING: No matches approved. Stopping processing.")
+    exit(0)
+
+# --- Step 5: Prepare Vendor Details Lookup ---
 vendor_lookup = {
     str(row["Vendor_Code"]).strip(): {
         "Distribution_GL_Account": row.get("Distribution_GL_Account", ""),
@@ -576,8 +638,11 @@ vendor_lookup = {
     for _, row in vendor_df.iterrows()
 }
 
-# --- Step 4: Inject only matched vendor info into JSON files ---
+# --- Step 6: Inject only approved vendor info into JSON files ---
 for _, row in match_df.iterrows():
+    if row["TXT_File"] not in approved_txt_files:
+        continue
+        
     base_name = os.path.splitext(row["TXT_File"])[0]
     json_path = os.path.join(json_folder, base_name + ".json")
 
@@ -598,6 +663,8 @@ for _, row in match_df.iterrows():
         print(f"SUCCESS: Enriched {json_path}")
     else:
         print(f"ERROR: JSON not found for: {base_name}")
+
+print("SUCCESS: Processing complete!")
 
 import os
 os.environ["MISTRAL_API_KEY"] = "5GPPqcV6edATEGnl0w09ORmhu8zqIzUL"  # Replace with your actual key

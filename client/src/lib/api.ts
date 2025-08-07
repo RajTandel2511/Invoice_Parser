@@ -63,7 +63,7 @@ export const api = {
   },
 
   // Process invoices
-  async processInvoices(): Promise<{ success: boolean; message: string; files?: string[]; stdout?: string; stderr?: string }> {
+  async processInvoices(): Promise<{ success: boolean; message: string; files?: string[]; stdout?: string; stderr?: string; vendorMatches?: any[] }> {
     try {
       const response = await fetch(`${API_BASE_URL}/process-invoices`, {
         method: 'POST',
@@ -84,6 +84,126 @@ export const api = {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Processing failed'
+      };
+    }
+  },
+
+  // Get vendor matches
+  async getVendorMatches(): Promise<{ success: boolean; matches?: any[]; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/vendor-matches`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get vendor matches');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Get vendor matches error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get vendor matches'
+      };
+    }
+  },
+
+  // Check if approval is needed
+  async checkApprovalNeeded(): Promise<{ success: boolean; approvalNeeded?: boolean; matches?: any[]; message?: string }> {
+    try {
+      console.log('Checking if approval is needed...');
+      
+      const response = await fetch(`${API_BASE_URL}/check-approval-needed`);
+      
+      console.log('Check approval response status:', response.status);
+      
+      const result = await response.json();
+      
+      console.log('Check approval response data:', result);
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to check approval status');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Check approval needed error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to check approval status'
+      };
+    }
+  },
+
+  // Approve vendor matches
+  async approveVendors(approvedMatches: any[]): Promise<{ success: boolean; message?: string }> {
+    try {
+      console.log('Sending approval request with matches:', approvedMatches);
+      
+      const response = await fetch(`${API_BASE_URL}/approve-vendors`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ approvedMatches }),
+      });
+
+      console.log('Approval response status:', response.status);
+      
+      const result = await response.json();
+      
+      console.log('Approval response data:', result);
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to approve vendors');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Approve vendors error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to approve vendors'
+      };
+    }
+  },
+
+  // Check processing status
+  async checkProcessingStatus(): Promise<{ success: boolean; isProcessingComplete?: boolean; isStillRunning?: boolean; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/processing-status`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to check processing status');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Check processing status error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to check processing status'
+      };
+    }
+  },
+
+  // Check if raw_pdfs folder is empty
+  async checkRawPdfs(): Promise<{ success: boolean; isEmpty?: boolean; fileCount?: number; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/check-raw-pdfs`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to check raw PDFs folder');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Check raw PDFs error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to check raw PDFs folder'
       };
     }
   },
