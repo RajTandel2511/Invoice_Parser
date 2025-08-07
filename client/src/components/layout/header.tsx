@@ -16,7 +16,7 @@ export default function Header() {
         </div>
         <div className="flex items-center space-x-4">
           <ThemeToggle />
-          <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm px-6">
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm hover:shadow-md transition-shadow px-6">
             <Plus className="h-4 w-4 mr-2" />
             New Invoice
           </Button>

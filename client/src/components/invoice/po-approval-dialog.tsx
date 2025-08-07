@@ -241,14 +241,14 @@ export default function POApprovalDialog({
           <Button
             variant="outline"
             onClick={onClose}
-            className="hover:bg-gray-50"
+            className="hover:bg-muted/50"
           >
             Cancel
           </Button>
           <Button
             onClick={handleConfirm}
             disabled={editedMatches.length === 0 || isApproving}
-            className="hover:bg-green-50 hover:border-green-200"
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {isApproving ? (
               <>

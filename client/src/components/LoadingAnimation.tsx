@@ -16,8 +16,8 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
   if (!isVisible) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-      <div className="bg-gray-900 border border-gray-700 rounded-xl p-12 flex flex-col items-center space-y-6 max-w-xl mx-4 shadow-2xl">
+    <div className="fixed inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-card border border-border rounded-xl p-12 flex flex-col items-center space-y-6 max-w-xl mx-4 shadow-2xl">
         <div className="w-96 h-32 flex items-center justify-center">
           {!animationError ? (
             <Lottie 
@@ -32,22 +32,22 @@ export const LoadingAnimation: React.FC<LoadingAnimationProps> = ({
             />
           ) : (
             <div className="flex items-center justify-center w-full h-full">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-400"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
             </div>
           )}
         </div>
         <div className="text-center space-y-3">
-          <p className="text-gray-200 text-lg font-medium">
+          <p className="text-foreground text-lg font-medium">
             {message}
           </p>
-          <p className="text-gray-400 text-sm">
+          <p className="text-muted-foreground text-sm">
             This may take a few moments...
           </p>
         </div>
         <div className="flex space-x-2">
-          <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce"></div>
-          <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-          <div className="w-3 h-3 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+          <div className="w-3 h-3 bg-primary rounded-full animate-bounce"></div>
+          <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+          <div className="w-3 h-3 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
         </div>
       </div>
     </div>

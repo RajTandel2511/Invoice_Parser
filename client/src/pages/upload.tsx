@@ -256,16 +256,16 @@ export default function Upload() {
         // Keep the loading animation running until approval dialog appears
         // The backend should pause processing and wait for approval
         
-               toast({
-         title: "Processing Started",
+        toast({
+          title: "Processing Started",
          description: "Processing has started. Waiting for vendor and PO approval...",
-       });
-       
+        });
+        
        console.log('🚀 Processing started, beginning to poll for vendor and PO approval...');
        console.log('⏰ Start time:', new Date().toISOString());
        
        // Start polling for both vendor and PO approval needed
-       pollForApproval();
+        pollForApproval();
        pollForPOApproval();
         
       } else {
@@ -287,7 +287,7 @@ export default function Upload() {
     }
   };
 
-    const pollForApproval = async () => {
+  const pollForApproval = async () => {
     const checkApproval = async () => {
       try {
         console.log('🔍 Checking approval needed...');
@@ -299,7 +299,7 @@ export default function Upload() {
         const result = await api.checkApprovalNeeded();
         console.log('📋 Approval check result:', result);
         
-                 if (result.success && result.approvalNeeded && result.matches && !hasShownApprovalDialog) {
+        if (result.success && result.approvalNeeded && result.matches && !hasShownApprovalDialog) {
            console.log('✅ Approval needed detected!');
            console.log('📊 Number of matches found:', result.matches.length);
            console.log('📅 Current time:', new Date().toISOString());
@@ -321,12 +321,12 @@ export default function Upload() {
              console.log(`  Address_Match_Score: "${match.Address_Match_Score}"`);
            });
            
-           setVendorMatches(result.matches);
-           setShowVendorApproval(true);
-           setHasShownApprovalDialog(true); // Mark that we've shown the dialog
+          setVendorMatches(result.matches);
+          setShowVendorApproval(true);
+          setHasShownApprovalDialog(true); // Mark that we've shown the dialog
            setIsProcessing(false); // Stop the loading animation when dialog appears
-           return true; // Stop polling
-         }
+          return true; // Stop polling
+        }
         
         return false; // Continue polling
       } catch (error) {
@@ -668,9 +668,9 @@ export default function Upload() {
 
   return (
     <div className="container mx-auto p-6">
-             {/* Loading Animation */}
-               <LoadingAnimation 
-          isVisible={isProcessing} 
+      {/* Loading Animation */}
+      <LoadingAnimation 
+        isVisible={isProcessing} 
           message={
             showVendorApproval ? 
               "Processing paused - waiting for vendor approval..." :
@@ -680,7 +680,7 @@ export default function Upload() {
                 "Processing invoices... Please wait while we complete the final steps." :
                 "Processing invoices... Please wait while we extract and analyze your documents."
           }
-        />
+      />
       
       {/* Vendor Approval Dialog */}
       <VendorApprovalDialog
@@ -710,13 +710,13 @@ export default function Upload() {
 
         <div className="grid gap-6">
           {/* Upload Section */}
-          <Card>
+          <Card className="shadow-sm border-border">
             <CardContent className="p-6">
               <div
                 {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-all duration-200 ${
                   isDragActive
-                    ? "border-primary bg-primary/5"
+                    ? "border-primary bg-primary/5 shadow-md"
                     : "border-muted-foreground/25 hover:border-primary/50"
                 }`}
               >
@@ -748,7 +748,7 @@ export default function Upload() {
               <div className="mt-6 flex gap-3">
                 <Button 
                   onClick={handleProcessInvoices}
-                  className="flex-1"
+                  className="flex-1 shadow-sm hover:shadow-md transition-shadow"
                   variant="default"
                   disabled={uploadedFiles.filter(f => f.filename.endsWith('.pdf')).length === 0 || isProcessing}
                 >
@@ -757,7 +757,7 @@ export default function Upload() {
                 </Button>
                 <Button 
                   onClick={handleDownloadProcessedFiles}
-                  className="flex-1"
+                  className="flex-1 shadow-sm hover:shadow-md transition-shadow"
                   variant={processingComplete ? "default" : "outline"}
                   disabled={!processingComplete}
                 >
@@ -769,7 +769,7 @@ export default function Upload() {
           </Card>
 
           {/* Upload Status */}
-          <Card>
+          <Card className="shadow-sm border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
@@ -795,7 +795,7 @@ export default function Upload() {
                           </p>
                         </div>
                       </div>
-                      <Badge variant="secondary">
+                      <Badge variant="secondary" className="shadow-sm">
                         {file.filename.endsWith('.pdf') ? 'PDF' : 'Image'}
                       </Badge>
                     </div>

@@ -2,27 +2,7 @@
   "approved": true,
   "approved_matches": [
     {
-      "TXT_File": "01-871775 LORSON_1754587872045.txt",
-      "Vendor_Code": "LORSON",
-      "Vendor_Name": "Lord & Sons Inc.",
-      "Vendor_Contact": "(408) 817-8910",
-      "Vendor_Address": "P.O. Box 8464  Pasadena, CA 91109-8464",
-      "Address_Match_Score": "97",
-      "Matched_Contact": "4088178910",
-      "Matched_By": "contact + address"
-    },
-    {
-      "TXT_File": "110-S101115456.001 JONSUP_1754587872046.txt",
-      "Vendor_Code": "JONSUP",
-      "Vendor_Name": "Johnstone Supply",
-      "Vendor_Contact": "",
-      "Vendor_Address": "P.O. Box 23814  Oakland, CA 94623-0814",
-      "Address_Match_Score": "100",
-      "Matched_Contact": "",
-      "Matched_By": "address only"
-    },
-    {
-      "TXT_File": "110-s101126669.001 JONSUP_1754587872044.txt",
+      "TXT_File": "doc11186020250805072454_Part5_1754589676328.txt",
       "Vendor_Code": "JONSUP",
       "Vendor_Name": "Johnstone Supply",
       "Vendor_Contact": "",

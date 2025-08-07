@@ -239,14 +239,14 @@ export default function VendorApprovalDialog({
             variant="outline" 
             onClick={onClose} 
             disabled={isApproving}
-            className="hover:bg-gray-50"
+            className="hover:bg-muted/50"
           >
             Cancel
           </Button>
           <Button 
             onClick={handleConfirm} 
             disabled={editedMatches.length === 0 || isApproving}
-            className="bg-green-600 hover:bg-green-700"
+            className="bg-primary text-primary-foreground hover:bg-primary/90"
           >
             {isApproving ? (
               <>
