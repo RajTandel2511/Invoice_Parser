@@ -345,5 +345,25 @@ export const api = {
         message: error instanceof Error ? error.message : 'Download failed'
       };
     }
+  },
+
+  // Check if uploads folder is empty
+  async checkUploadsFolder(): Promise<{ success: boolean; isEmpty?: boolean; fileCount?: number; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/check-uploads-folder`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to check uploads folder');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Check uploads folder error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to check uploads folder'
+      };
+    }
   }
 }; 

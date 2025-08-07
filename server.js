@@ -685,9 +685,16 @@ app.get('/api/check-raw-pdfs', async (req, res) => {
 app.post('/api/approve-vendors', async (req, res) => {
   try {
     console.log('Received approval request:', req.body);
+    console.log('Request body type:', typeof req.body);
+    console.log('Request body keys:', Object.keys(req.body));
     
     const { approvedMatches } = req.body;
+    console.log('Extracted approvedMatches:', approvedMatches);
+    console.log('approvedMatches type:', typeof approvedMatches);
+    console.log('approvedMatches length:', approvedMatches ? approvedMatches.length : 'undefined');
+    
     const approvalStatusPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'approval_status.json');
+    const csvPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'matched_vendors_from_txt.csv');
     
     if (!approvedMatches || !Array.isArray(approvedMatches)) {
       console.error('Invalid approved matches data:', approvedMatches);
@@ -707,6 +714,54 @@ app.post('/api/approve-vendors', async (req, res) => {
 
     fs.writeFileSync(approvalStatusPath, JSON.stringify(approvalStatus, null, 2));
     
+         // Update the CSV file with the edited data
+     if (approvedMatches.length > 0) {
+       try {
+         console.log('Updating CSV file with edited vendor data...');
+         
+         // Define the standard headers for vendor matches
+         const standardHeaders = [
+           'TXT_File',
+           'Vendor_Code', 
+           'Vendor_Name',
+           'Vendor_Contact',
+           'Vendor_Address',
+           'Address_Match_Score',
+           'Matched_Contact',
+           'Matched_By'
+         ];
+         
+         // Create new CSV content with updated data
+         const csvLines = [];
+         csvLines.push(standardHeaders.join(','));
+         
+         approvedMatches.forEach((match, index) => {
+           console.log(`Processing match ${index}:`, match);
+           console.log(`Match keys:`, Object.keys(match));
+           
+           const row = standardHeaders.map(header => {
+             const value = match[header] || '';
+             console.log(`Header "${header}": "${value}"`);
+             // Escape commas and quotes in the value
+             if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+               return `"${value.replace(/"/g, '""')}"`;
+             }
+             return value;
+           });
+           csvLines.push(row.join(','));
+         });
+         
+         const newCsvContent = csvLines.join('\n');
+         fs.writeFileSync(csvPath, newCsvContent);
+         console.log('CSV file updated successfully with edited vendor data');
+         console.log('New CSV content:', newCsvContent);
+         
+       } catch (error) {
+         console.error('Error updating CSV file:', error);
+         // Don't fail the request if CSV update fails
+       }
+     }
+    
     // Clear the content hash so we don't show the same data again
     const lastContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_content_hash.txt');
     if (fs.existsSync(lastContentHashPath)) {
@@ -722,7 +777,7 @@ app.post('/api/approve-vendors', async (req, res) => {
 
     res.json({
       success: true,
-      message: `Successfully approved ${approvedMatches.length} vendor matches`
+      message: `Successfully approved ${approvedMatches.length} vendor matches and updated CSV file`
     });
   } catch (error) {
     console.error('Error approving vendors:', error);
@@ -980,6 +1035,40 @@ app.post('/api/approve-po-matches', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to approve PO matches'
+    });
+  }
+});
+
+// Check if uploads folder is empty
+app.get('/api/check-uploads-folder', (req, res) => {
+  try {
+    console.log('Checking uploads folder status...');
+    
+    const files = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'))
+      .filter(file => {
+        const filePath = path.join(uploadsDir, file);
+        const stats = fs.statSync(filePath);
+        return stats.isFile();
+      });
+    
+    const fileCount = files.length;
+    const isEmpty = fileCount === 0;
+    
+    console.log('Uploads folder file count:', fileCount);
+    console.log('Uploads folder is empty:', isEmpty);
+    
+    res.json({
+      success: true,
+      isEmpty: isEmpty,
+      fileCount: fileCount,
+      message: isEmpty ? 'Uploads folder is empty' : `Found ${fileCount} file(s) in uploads folder`
+    });
+  } catch (error) {
+    console.error('Error checking uploads folder:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check uploads folder status'
     });
   }
 });

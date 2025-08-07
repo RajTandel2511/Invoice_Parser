@@ -12,8 +12,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Check, X, AlertCircle, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
 
 interface VendorMatch {
   TXT_File?: string;
@@ -39,7 +41,7 @@ export default function VendorApprovalDialog({
   vendorMatches,
   onApprove
 }: VendorApprovalDialogProps) {
-  const [selectedMatches, setSelectedMatches] = useState<Set<string>>(new Set());
+  const [editedMatches, setEditedMatches] = useState<VendorMatch[]>([]);
   const [isApproving, setIsApproving] = useState(false);
   const { toast } = useToast();
 
@@ -62,65 +64,46 @@ export default function VendorApprovalDialog({
     }
   }, [isOpen, vendorMatches]);
 
-  // Reset selected matches when dialog opens
+  // Reset edited matches when dialog opens
   useEffect(() => {
     if (isOpen) {
-      setSelectedMatches(new Set());
+      setEditedMatches([...vendorMatches]);
       setIsApproving(false);
     }
-  }, [isOpen]);
+  }, [isOpen, vendorMatches]);
 
-  const handleToggleMatch = (txtFile: string) => {
-    if (!txtFile) {
-      console.log('handleToggleMatch called with empty txtFile');
-      return;
-    }
+  const handleUpdateMatch = (index: number, field: keyof VendorMatch, value: string) => {
+    console.log('Updating match:', index, field, value);
     
-    console.log('Toggling match for:', txtFile);
-    console.log('Current selected matches:', Array.from(selectedMatches));
-    
-    const newSelected = new Set(selectedMatches);
-    if (newSelected.has(txtFile)) {
-      newSelected.delete(txtFile);
-      console.log('Removed from selection:', txtFile);
-    } else {
-      newSelected.add(txtFile);
-      console.log('Added to selection:', txtFile);
-    }
-    setSelectedMatches(newSelected);
-    console.log('Updated selected matches:', Array.from(newSelected));
+    const updatedMatches = [...editedMatches];
+    updatedMatches[index] = {
+      ...updatedMatches[index],
+      [field]: value
+    };
+    setEditedMatches(updatedMatches);
+    console.log('Updated matches:', updatedMatches);
   };
 
   const handleApproveAll = () => {
     console.log('Approve All clicked');
-    const allTxtFiles = vendorMatches
-      .map(match => match.TXT_File)
-      .filter(Boolean) as string[];
-    console.log('All TXT files:', allTxtFiles);
-    setSelectedMatches(new Set(allTxtFiles));
+    // All matches are automatically approved when dialog opens
   };
 
   const handleRejectAll = () => {
     console.log('Reject All clicked');
-    setSelectedMatches(new Set());
+    // Reset to original data
+    setEditedMatches([...vendorMatches]);
   };
 
   const handleConfirm = async () => {
     console.log('Confirm button clicked');
-    console.log('Selected matches:', Array.from(selectedMatches));
-    console.log('Available vendor matches:', vendorMatches);
-    
-    const approvedMatches = vendorMatches.filter(match => 
-      match.TXT_File && selectedMatches.has(match.TXT_File)
-    );
+    console.log('Edited matches to send:', editedMatches);
+    console.log('Number of edited matches:', editedMatches.length);
 
-    console.log('Approved matches to send:', approvedMatches);
-    console.log('Number of approved matches:', approvedMatches.length);
-
-    if (approvedMatches.length === 0) {
+    if (editedMatches.length === 0) {
       toast({
-        title: "No Matches Selected",
-        description: "Please select at least one vendor match to approve.",
+        title: "No Matches Available",
+        description: "No vendor matches available to approve.",
         variant: "destructive",
       });
       return;
@@ -129,8 +112,8 @@ export default function VendorApprovalDialog({
     setIsApproving(true);
     
     try {
-      console.log('Calling onApprove with:', approvedMatches);
-      await onApprove(approvedMatches);
+      console.log('Calling onApprove with:', editedMatches);
+      await onApprove(editedMatches);
       console.log('Approval successful, closing dialog');
       onClose();
     } catch (error) {
@@ -174,59 +157,51 @@ export default function VendorApprovalDialog({
             Vendor Match Approval
           </DialogTitle>
           <DialogDescription>
-            Processing has been paused. Review and approve the automatically matched vendors for your invoices. 
-            Processing will continue after you approve the matches.
+            Processing has been paused. Review and edit the automatically matched vendors for your invoices. 
+            You can modify the Vendor Code and Vendor Name fields if needed. Processing will continue after you approve the matches.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Vendor Matches List */}
           <div className="space-y-3">
-            {vendorMatches && vendorMatches.length > 0 ? vendorMatches.map((match, index) => {
+            {editedMatches && editedMatches.length > 0 ? editedMatches.map((match, index) => {
               const txtFile = match.TXT_File;
-              const isSelected = txtFile ? selectedMatches.has(txtFile) : false;
               
               return (
                 <Card 
                   key={index}
-                  className={`cursor-pointer transition-colors ${
-                    isSelected
-                      ? "ring-2 ring-primary bg-primary/5"
-                      : "hover:bg-muted/50"
-                  }`}
-                  onClick={() => txtFile && handleToggleMatch(txtFile)}
+                  className="transition-colors hover:bg-muted/50"
                 >
                   <CardContent className="p-4">
                     <div className="flex items-center gap-4">
-                      {/* Checkbox */}
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => txtFile && handleToggleMatch(txtFile)}
-                        className="rounded border-gray-300"
-                        disabled={!txtFile}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      
-                      {/* Single row with the three key fields */}
-                      <div className="flex-1 grid grid-cols-3 gap-6">
-                        <div>
+                      {/* Responsive layout with editable fields */}
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="min-w-0">
                           <div className="text-xs font-medium text-muted-foreground mb-1">File</div>
-                          <div className="font-semibold text-base">
+                          <div className="font-semibold text-sm break-all">
                             {txtFile ? txtFile.replace('.txt', '') : 'Unknown File'}
                           </div>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="text-xs font-medium text-muted-foreground mb-1">Vendor Code</div>
-                          <div className="font-semibold text-base">
-                            {match.Vendor_Code || 'N/A'}
-                          </div>
+                          <Input
+                            type="text"
+                            value={match.Vendor_Code || ''}
+                            onChange={(e) => handleUpdateMatch(index, 'Vendor_Code', e.target.value)}
+                            className="text-sm"
+                            placeholder="Enter vendor code"
+                          />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="text-xs font-medium text-muted-foreground mb-1">Vendor Name</div>
-                          <div className="font-semibold text-base">
-                            {match.Vendor_Name || 'N/A'}
-                          </div>
+                          <Input
+                            type="text"
+                            value={match.Vendor_Name || ''}
+                            onChange={(e) => handleUpdateMatch(index, 'Vendor_Name', e.target.value)}
+                            className="text-sm"
+                            placeholder="Enter vendor name"
+                          />
                         </div>
                       </div>
                       
@@ -259,7 +234,7 @@ export default function VendorApprovalDialog({
           </Button>
           <Button 
             onClick={handleConfirm} 
-            disabled={selectedMatches.size === 0 || isApproving}
+            disabled={editedMatches.length === 0 || isApproving}
             className="bg-green-600 hover:bg-green-700"
           >
             {isApproving ? (
@@ -270,7 +245,7 @@ export default function VendorApprovalDialog({
             ) : (
               <>
                 <Check className="h-4 w-4 mr-2" />
-                Approve Selected ({selectedMatches.size})
+                Approve All ({editedMatches.length})
               </>
             )}
           </Button>

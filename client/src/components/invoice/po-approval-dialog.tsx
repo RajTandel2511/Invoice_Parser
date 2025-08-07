@@ -194,29 +194,29 @@ export default function POApprovalDialog({
                         onClick={(e) => e.stopPropagation()}
                       />
                       
-                      {/* Single row with the key fields */}
-                      <div className="flex-1 grid grid-cols-4 gap-4">
-                        <div>
+                      {/* Responsive layout with proper text wrapping */}
+                      <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="min-w-0">
                           <div className="text-xs font-medium text-muted-foreground mb-1">File</div>
-                          <div className="font-semibold text-base">
+                          <div className="font-semibold text-sm break-all">
                             {fileName ? fileName.replace('.pdf', '') : 'Unknown File'}
                           </div>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="text-xs font-medium text-muted-foreground mb-1">Extracted PO</div>
-                          <div className="font-semibold text-base">
+                          <div className="font-semibold text-sm break-words">
                             {match.extracted_po_number || 'N/A'}
                           </div>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="text-xs font-medium text-muted-foreground mb-1">Clean PO</div>
-                          <div className="font-semibold text-base">
+                          <div className="font-semibold text-sm break-words">
                             {match.clean_po_number || 'N/A'}
                           </div>
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="text-xs font-medium text-muted-foreground mb-1">Job Number</div>
-                          <div className="font-semibold text-base">
+                          <div className="font-semibold text-sm break-words">
                             {match.Job_Number || 'N/A'}
                           </div>
                         </div>

@@ -207,6 +207,18 @@ export default function Upload() {
 
   const handleProcessInvoices = async () => {
     try {
+      // Check if uploads folder is empty
+      const uploadsCheck = await api.checkUploadsFolder();
+      
+      if (uploadsCheck.success && uploadsCheck.isEmpty) {
+        toast({
+          title: "No Files Uploaded",
+          description: "Please upload invoice files before processing. The uploads folder is empty.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       // Check if there are any PDF files to process
       const pdfFiles = uploadedFiles.filter(file => file.filename.endsWith('.pdf'));
       
@@ -793,22 +805,7 @@ export default function Upload() {
             </CardContent>
           </Card>
 
-          {/* Processing Status */}
-          {processingComplete && (
-            <Card className="border-green-200 bg-green-50">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3">
-                  <CheckCircle className="h-6 w-6 text-green-600" />
-                  <div>
-                    <h3 className="font-semibold text-green-800">Processing Complete</h3>
-                    <p className="text-sm text-green-700">
-                      Your invoices have been processed successfully. You can now download the processed files.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+
         </div>
       </div>
     </div>

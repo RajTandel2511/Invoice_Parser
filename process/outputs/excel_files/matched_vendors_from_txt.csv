@@ -1,2 +1,23 @@
-"TXT_File","Vendor_Code","Vendor_Name","Vendor_Contact","Vendor_Address","Address_Match_Score","Matched_Contact","Matched_By"
-"doc11186020250805072454_Part3_1754581921701.txt","LORSON","Lord & Sons Inc.","(408) 817-8910","P.O. Box 8464  Pasadena, CA 91109-8464","97","4088178910","contact + address"
+TXT_File,Vendor_Code,Vendor_Name,Vendor_Contact,Vendor_Address,Address_Match_Score,Matched_Contact,Matched_By
+106271 SSFLUM_1754585458291.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce   South San Francisco, CA 94080",100,,address only
+106386 SSFLUM_1754585458293.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce   South San Francisco, CA 94080",100,6505885711,contact + address
+106465 SSFLUM_1754585458297.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce   South San Francisco, CA 94080",100,6505885711,contact + address
+106699 SSFLUM_1754585458300.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce   South San Francisco, CA 94080",100,6505885711,contact + address
+106700 SSFLUM_1754585458306.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce   South San Francisco, CA 94080",100,6505885711,contact + address
+107155 SSFLUM_1754585458308.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce   South San Francisco, CA 94080",100,6505885711,contact + address
+107274 SSFLUM_1754585458315.txt,SSFLUM,South City Lumber & Supply,(650) 588-5711,"499 Railroad At Spruce   South San Francisco, CA 94080",100,6505885711,contact + address
+Captive Aire_1754585458319.txt,CAPAIR,Captive Aire,,"P.O. Box 60270  Charlotte, NC 28260",100,,address only
+doc11181820250804113622-5_1754585458321.txt,SLABRO,Slakey,,"P.O. Box 3025  Tacoma, WA 98401",96,,address only
+doc11181820250804113622-6_1754585458323.txt,SLABRO,Slakey,,"P.O. Box 3025  Tacoma, WA 98401",92,,address only
+doc11181820250804113622-7_1754585458339.txt,SLABRO,Slakey,,"P.O. Box 3025  Tacoma, WA 98401",96,,address only
+doc11181820250804113622-8_1754585458343.txt,SLABRO,Slakey,,"P.O. Box 3025  Tacoma, WA 98401",92,,address only
+doc11186020250805072454_Part10_1754585458406.txt,AIRSUP,Air Filter Supply,,"P.O Box 1166  Rancho Cordova, CA 95741",100,,address only
+doc11186020250805072454_Part1_1754585458364.txt,LORSON,Lord & Sons Inc.,(408) 817-8910,"P.O. Box 8464  Pasadena, CA 91109-8464",97,4088178910,contact + address
+doc11186020250805072454_Part2_1754585458367.txt,LORSON,Lord & Sons Inc.,(408) 817-8910,"P.O. Box 8464  Pasadena, CA 91109-8464",97,4088178910,contact + address
+doc11186020250805072454_Part3_1754585458369.txt,LORSON,Lord & Sons Inc.,(408) 817-8910,"P.O. Box 8464  Pasadena, CA 91109-8464",97,4088178910,contact + address
+doc11186020250805072454_Part4_1754585458373.txt,LORSON,Lord & Sons Inc.,(408) 817-8910,"P.O. Box 8464  Pasadena, CA 91109-8464",97,4088178910,contact + address
+doc11186020250805072454_Part5_1754585458378.txt,JONSUP,Johnstone Supply,,"P.O. Box 23814  Oakland, CA 94623-0814",100,,address only
+doc11186020250805072454_Part6_1754585458391.txt,OMNDUC,Omni Duct NoCal,,"6400 Artesia Blvd,  Buena Park, CA 90620",91,,address only
+doc11186020250805072454_Part7_1754585458393.txt,OMNDUC,Omni Duct NoCal,,"6400 Artesia Blvd,  Buena Park, CA 90620",100,,address only
+doc11186020250805072454_Part8_1754585458395.txt,OMNDUC,Omni Duct NoCal,,"6400 Artesia Blvd,  Buena Park, CA 90620",100,,address only
+doc11186020250805072454_Part9_1754585458396.txt,RSDTOT,RSD,,"26021 Atlantic Ocean Dr.  Lake Forest, CA 92630",96,,address only

@@ -1,1 +1,225 @@
-{"approved": false, "approved_matches": []}
+{
+  "approved": true,
+  "approved_matches": [
+    {
+      "TXT_File": "106271 SSFLUM_1754585458291.txt",
+      "Vendor_Code": "SSFLUM",
+      "Vendor_Name": "South City Lumber & Supply",
+      "Vendor_Contact": "(650) 588-5711",
+      "Vendor_Address": "499 Railroad At Spruce   South San Francisco, CA 94080",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "106386 SSFLUM_1754585458293.txt",
+      "Vendor_Code": "SSFLUM",
+      "Vendor_Name": "South City Lumber & Supply",
+      "Vendor_Contact": "(650) 588-5711",
+      "Vendor_Address": "499 Railroad At Spruce   South San Francisco, CA 94080",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "6505885711",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "106465 SSFLUM_1754585458297.txt",
+      "Vendor_Code": "SSFLUM",
+      "Vendor_Name": "South City Lumber & Supply",
+      "Vendor_Contact": "(650) 588-5711",
+      "Vendor_Address": "499 Railroad At Spruce   South San Francisco, CA 94080",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "6505885711",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "106699 SSFLUM_1754585458300.txt",
+      "Vendor_Code": "SSFLUM",
+      "Vendor_Name": "South City Lumber & Supply",
+      "Vendor_Contact": "(650) 588-5711",
+      "Vendor_Address": "499 Railroad At Spruce   South San Francisco, CA 94080",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "6505885711",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "106700 SSFLUM_1754585458306.txt",
+      "Vendor_Code": "SSFLUM",
+      "Vendor_Name": "South City Lumber & Supply",
+      "Vendor_Contact": "(650) 588-5711",
+      "Vendor_Address": "499 Railroad At Spruce   South San Francisco, CA 94080",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "6505885711",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "107155 SSFLUM_1754585458308.txt",
+      "Vendor_Code": "SSFLUM",
+      "Vendor_Name": "South City Lumber & Supply",
+      "Vendor_Contact": "(650) 588-5711",
+      "Vendor_Address": "499 Railroad At Spruce   South San Francisco, CA 94080",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "6505885711",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "107274 SSFLUM_1754585458315.txt",
+      "Vendor_Code": "SSFLUM",
+      "Vendor_Name": "South City Lumber & Supply",
+      "Vendor_Contact": "(650) 588-5711",
+      "Vendor_Address": "499 Railroad At Spruce   South San Francisco, CA 94080",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "6505885711",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "Captive Aire_1754585458319.txt",
+      "Vendor_Code": "CAPAIR",
+      "Vendor_Name": "Captive Aire",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O. Box 60270  Charlotte, NC 28260",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11181820250804113622-5_1754585458321.txt",
+      "Vendor_Code": "SLABRO",
+      "Vendor_Name": "Slakey",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O. Box 3025  Tacoma, WA 98401",
+      "Address_Match_Score": "96",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11181820250804113622-6_1754585458323.txt",
+      "Vendor_Code": "SLABRO",
+      "Vendor_Name": "Slakey",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O. Box 3025  Tacoma, WA 98401",
+      "Address_Match_Score": "92",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11181820250804113622-7_1754585458339.txt",
+      "Vendor_Code": "SLABRO",
+      "Vendor_Name": "Slakey",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O. Box 3025  Tacoma, WA 98401",
+      "Address_Match_Score": "96",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11181820250804113622-8_1754585458343.txt",
+      "Vendor_Code": "SLABRO",
+      "Vendor_Name": "Slakey",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O. Box 3025  Tacoma, WA 98401",
+      "Address_Match_Score": "92",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part10_1754585458406.txt",
+      "Vendor_Code": "AIRSUP",
+      "Vendor_Name": "Air Filter Supply",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O Box 1166  Rancho Cordova, CA 95741",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part1_1754585458364.txt",
+      "Vendor_Code": "LORSON",
+      "Vendor_Name": "Lord & Sons Inc.",
+      "Vendor_Contact": "(408) 817-8910",
+      "Vendor_Address": "P.O. Box 8464  Pasadena, CA 91109-8464",
+      "Address_Match_Score": "97",
+      "Matched_Contact": "4088178910",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part2_1754585458367.txt",
+      "Vendor_Code": "LORSON",
+      "Vendor_Name": "Lord & Sons Inc.",
+      "Vendor_Contact": "(408) 817-8910",
+      "Vendor_Address": "P.O. Box 8464  Pasadena, CA 91109-8464",
+      "Address_Match_Score": "97",
+      "Matched_Contact": "4088178910",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part3_1754585458369.txt",
+      "Vendor_Code": "LORSON",
+      "Vendor_Name": "Lord & Sons Inc.",
+      "Vendor_Contact": "(408) 817-8910",
+      "Vendor_Address": "P.O. Box 8464  Pasadena, CA 91109-8464",
+      "Address_Match_Score": "97",
+      "Matched_Contact": "4088178910",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part4_1754585458373.txt",
+      "Vendor_Code": "LORSON",
+      "Vendor_Name": "Lord & Sons Inc.",
+      "Vendor_Contact": "(408) 817-8910",
+      "Vendor_Address": "P.O. Box 8464  Pasadena, CA 91109-8464",
+      "Address_Match_Score": "97",
+      "Matched_Contact": "4088178910",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part5_1754585458378.txt",
+      "Vendor_Code": "JONSUP",
+      "Vendor_Name": "Johnstone Supply",
+      "Vendor_Contact": "",
+      "Vendor_Address": "P.O. Box 23814  Oakland, CA 94623-0814",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part6_1754585458391.txt",
+      "Vendor_Code": "OMNDUC",
+      "Vendor_Name": "Omni Duct NoCal",
+      "Vendor_Contact": "",
+      "Vendor_Address": "6400 Artesia Blvd,  Buena Park, CA 90620",
+      "Address_Match_Score": "91",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part7_1754585458393.txt",
+      "Vendor_Code": "OMNDUC",
+      "Vendor_Name": "Omni Duct NoCal",
+      "Vendor_Contact": "",
+      "Vendor_Address": "6400 Artesia Blvd,  Buena Park, CA 90620",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part8_1754585458395.txt",
+      "Vendor_Code": "OMNDUC",
+      "Vendor_Name": "Omni Duct NoCal",
+      "Vendor_Contact": "",
+      "Vendor_Address": "6400 Artesia Blvd,  Buena Park, CA 90620",
+      "Address_Match_Score": "100",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    },
+    {
+      "TXT_File": "doc11186020250805072454_Part9_1754585458396.txt",
+      "Vendor_Code": "RSDTOT",
+      "Vendor_Name": "RSD",
+      "Vendor_Contact": "",
+      "Vendor_Address": "26021 Atlantic Ocean Dr.  Lake Forest, CA 92630",
+      "Address_Match_Score": "96",
+      "Matched_Contact": "",
+      "Matched_By": "address only"
+    }
+  ]
+}

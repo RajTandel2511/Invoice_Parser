@@ -630,6 +630,12 @@ if approved_matches:
     final_matches = [match for match in final_matches if match["TXT_File"] in approved_txt_files]
     
     print(f"SUCCESS: Processing {len(final_matches)} approved vendor matches...")
+    
+    # IMPORTANT: Re-read the CSV file to get the updated vendor information
+    print("SUCCESS: Reading updated vendor information from CSV file...")
+    updated_match_df = pd.read_csv(output_csv)
+    print(f"SUCCESS: Loaded {len(updated_match_df)} updated vendor matches from CSV")
+    
 else:
     print("WARNING: No matches approved. Stopping processing.")
     exit(0)
@@ -645,7 +651,7 @@ vendor_lookup = {
 }
 
 # --- Step 6: Inject only approved vendor info into JSON files ---
-for _, row in match_df.iterrows():
+for _, row in updated_match_df.iterrows():
     if row["TXT_File"] not in approved_txt_files:
         continue
         
@@ -656,7 +662,7 @@ for _, row in match_df.iterrows():
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
-        # Inject matched vendor info
+        # Inject matched vendor info using the UPDATED data from CSV
         data["Vendor_Code"] = row["Vendor_Code"]
         data["Vendor_Name"] = row["Vendor_Name"]
 
@@ -666,7 +672,7 @@ for _, row in match_df.iterrows():
         with open(json_path, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 
-        print(f"SUCCESS: Enriched {json_path}")
+        print(f"SUCCESS: Enriched {json_path} with updated vendor info: {row['Vendor_Code']} - {row['Vendor_Name']}")
     else:
         print(f"ERROR: JSON not found for: {base_name}")
 
