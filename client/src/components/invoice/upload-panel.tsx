@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CloudUpload, FileText, CheckCircle, X } from "lucide-react";
+import { CloudUpload, FileText, CheckCircle, X, Play, CheckCircle2 } from "lucide-react";
 import { mockApi } from "@/lib/mockApi";
 import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,6 +26,9 @@ export default function UploadPanel({
   onInvoiceUpload,
 }: UploadPanelProps) {
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedCount, setProcessedCount] = useState(0);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -63,6 +66,54 @@ export default function UploadPanel({
       setUploadProgress(0);
       toast({
         title: "Upload Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const processInvoicesMutation = useMutation({
+    mutationFn: async () => {
+      setIsProcessing(true);
+      setProcessingProgress(0);
+      
+      // Simulate processing progress
+      const progressInterval = setInterval(() => {
+        setProcessingProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 5;
+        });
+      }, 300);
+
+      // Simulate API call
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      
+      clearInterval(progressInterval);
+      setProcessingProgress(100);
+      
+      // Clear progress after a delay
+      setTimeout(() => {
+        setProcessingProgress(0);
+        setIsProcessing(false);
+        setProcessedCount(invoices.length);
+      }, 1000);
+
+      return { processed: invoices.length };
+    },
+    onSuccess: (data) => {
+      toast({
+        title: "Processing Complete",
+        description: `Successfully processed ${data.processed} invoices`,
+      });
+    },
+    onError: (error) => {
+      setProcessingProgress(0);
+      setIsProcessing(false);
+      toast({
+        title: "Processing Failed",
         description: error.message,
         variant: "destructive",
       });
@@ -149,6 +200,64 @@ export default function UploadPanel({
               <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                 Processing invoices...
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Processed Invoice Section */}
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle2 className="h-5 w-5" />
+            Processed Invoice
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Button
+                onClick={() => processInvoicesMutation.mutate()}
+                disabled={isProcessing || invoices.length === 0}
+                className="flex items-center gap-2"
+              >
+                <Play className="h-4 w-4" />
+                Process Invoices
+              </Button>
+              {processedCount > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <span>{processedCount} invoices processed</span>
+                </div>
+              )}
+            </div>
+            {invoices.length > 0 && (
+              <Badge variant="outline" className="text-xs">
+                {invoices.length} pending
+              </Badge>
+            )}
+          </div>
+
+          {isProcessing && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium">Processing invoices...</span>
+                <span className="text-sm text-muted-foreground">
+                  {processingProgress}%
+                </span>
+              </div>
+              <Progress value={processingProgress} className="w-full" />
+            </div>
+          )}
+
+          {processedCount > 0 && !isProcessing && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <span className="text-sm font-medium text-green-800">
+                  Processing complete! {processedCount} invoices have been processed successfully.
+                </span>
               </div>
             </div>
           )}

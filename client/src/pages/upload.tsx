@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { CloudUpload, FileText, Download, CheckCircle, Play, CheckCircle2 } from 'lucide-react';
+import { CloudUpload, FileText, Download, CheckCircle, Play, CheckCircle2, Search, Filter, Eye, Building2, Briefcase, MessageSquare, Hash, Tag } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -12,6 +12,14 @@ import { LoadingAnimation } from '@/components/LoadingAnimation';
 import VendorApprovalDialog from '@/components/invoice/vendor-approval-dialog';
 import POApprovalDialog from '@/components/invoice/po-approval-dialog';
 import UploadedFilesDialog from '@/components/invoice/uploaded-files-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface UploadedFile {
   filename: string;
@@ -48,12 +56,253 @@ interface ProcessedInvoice {
   invoiceNumber: string;
   vendorCode: string;
   vendorName: string;
+  invoiceType: string;
   poNumber: string;
   jobNumber?: string;
   woNumber?: string;
   remarks?: string;
   invoiceDate: string;
   invoiceAmount: string;
+  taxAmount: string;
+  shippingCharges: string;
+  amountBeforeTaxes: string;
+  distributionGLAccount: string;
+  phaseCode: string;
+  costType: string;
+}
+
+interface InvoiceDetailModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  invoice: ProcessedInvoice | null;
+}
+
+function InvoiceDetailModal({ isOpen, onClose, invoice }: InvoiceDetailModalProps) {
+  if (!invoice) return null;
+
+  const formatCurrency = (amount: string) => {
+    const num = parseFloat(amount || '0');
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(num);
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    } catch {
+      return dateString;
+    }
+  };
+
+  // Helper function to check if a field has meaningful data
+  const hasData = (value: string | undefined) => {
+    return value && value.trim() !== '' && value !== 'N/A' && value !== '0' && value !== '0.00';
+  };
+
+  // Get available project fields
+  const projectFields = [
+    { label: 'PO Number', value: invoice.poNumber },
+    { label: 'Job Number', value: invoice.jobNumber },
+    { label: 'WO Number', value: invoice.woNumber },
+    { label: 'Remarks', value: invoice.remarks }
+  ].filter(field => hasData(field.value));
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-4xl max-h-[85vh] overflow-hidden flex flex-col bg-gray-50 dark:bg-gray-900">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b bg-white dark:bg-gray-800 shadow-sm border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 dark:from-blue-600 dark:to-blue-700 rounded-lg flex items-center justify-center shadow-sm">
+              <FileText className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Invoice Details</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400">#{invoice.invoiceNumber}</p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Generated</p>
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{new Date().toLocaleDateString()}</p>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="flex-1 overflow-y-auto p-6">
+          <div className="space-y-6">
+            {/* Key Information */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/50 dark:to-indigo-900/50 rounded-xl p-5 border border-blue-100 dark:border-blue-800 shadow-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Invoice Number</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">{invoice.invoiceNumber}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Vendor</p>
+                  <p className="text-lg font-semibold text-gray-900 dark:text-white">{invoice.vendorName || invoice.vendorCode}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">Total Amount</p>
+                  <p className="text-xl font-bold text-blue-600 dark:text-blue-400">{formatCurrency(invoice.invoiceAmount)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column */}
+              <div className="space-y-5">
+                {/* Invoice Information */}
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-100 dark:bg-blue-900/50 rounded-lg flex items-center justify-center">
+                      <FileText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    </div>
+                    Invoice Information
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Invoice Type:</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{invoice.invoiceType || 'Standard'}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Invoice Date:</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatDate(invoice.invoiceDate)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Vendor Code:</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{invoice.vendorCode}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Details */}
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/50 rounded-lg flex items-center justify-center">
+                      <Hash className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    </div>
+                    Financial Details
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Subtotal:</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatCurrency(invoice.amountBeforeTaxes)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Tax:</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatCurrency(invoice.taxAmount)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                      <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Shipping:</span>
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{formatCurrency(invoice.shippingCharges)}</span>
+                    </div>
+                    <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-600">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">Total:</span>
+                        <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(invoice.invoiceAmount)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right Column */}
+              <div className="space-y-5">
+                {/* Project Information */}
+                {projectFields.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <div className="w-8 h-8 bg-purple-100 dark:bg-purple-900/50 rounded-lg flex items-center justify-center">
+                        <Briefcase className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      </div>
+                      Project Information
+                    </h3>
+                    <div className="space-y-3">
+                      {projectFields.map((field, index) => (
+                        <div key={index} className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">{field.label}:</span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">{field.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Accounting Details */}
+                {(hasData(invoice.distributionGLAccount) || hasData(invoice.phaseCode) || hasData(invoice.costType)) && (
+                  <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                      <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center">
+                        <Tag className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      Accounting Details
+                    </h3>
+                    <div className="space-y-3">
+                      {hasData(invoice.distributionGLAccount) && (
+                        <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">GL Account:</span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">{invoice.distributionGLAccount}</span>
+                        </div>
+                      )}
+                      {hasData(invoice.phaseCode) && (
+                        <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Phase Code:</span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">{invoice.phaseCode}</span>
+                        </div>
+                      )}
+                      {hasData(invoice.costType) && (
+                        <div className="flex justify-between items-center py-2">
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Cost Type:</span>
+                          <span className="text-sm font-semibold text-gray-900 dark:text-white">{invoice.costType}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Status */}
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <div className="w-8 h-8 bg-green-100 dark:bg-green-900/50 rounded-lg flex items-center justify-center">
+                      <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    </div>
+                    Processing Status
+                  </h3>
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-green-500 dark:bg-green-400 rounded-full shadow-sm"></div>
+                    <span className="text-sm font-semibold text-green-600 dark:text-green-400">Successfully Processed</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-lg p-5 border border-gray-200 dark:border-gray-600 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Invoice Processing System</span>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Data source: Excel Processing Pipeline</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Invoice Value</p>
+                  <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{formatCurrency(invoice.invoiceAmount)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function Upload() {
@@ -78,6 +327,7 @@ export default function Upload() {
   // Processed invoice state
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
+  const [selectedInvoice, setSelectedInvoice] = useState<ProcessedInvoice | null>(null);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -765,6 +1015,13 @@ export default function Upload() {
         onApprove={handlePOApproval}
       />
       
+      {/* Invoice Detail Modal */}
+      <InvoiceDetailModal
+        isOpen={!!selectedInvoice}
+        onClose={() => setSelectedInvoice(null)}
+        invoice={selectedInvoice}
+      />
+
       <div className="w-full px-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold mb-2">Invoice Dashboard</h1>
@@ -916,6 +1173,9 @@ export default function Upload() {
                     <div>Amount</div>
                   </div>
                 </div>
+                <div className="text-xs text-muted-foreground px-6 py-2 bg-muted/20 border-b border-border">
+                  💡 Click on any invoice row to view detailed information
+                </div>
                 {invoicesLoading ? (
                   <div className="p-12 text-center bg-gradient-to-b from-background to-muted/10">
                     <div className="flex flex-col items-center gap-4">
@@ -929,25 +1189,28 @@ export default function Upload() {
                     </div>
                   </div>
                 ) : invoicesError ? (
-                  <div className="p-12 text-center bg-gradient-to-b from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20">
+                  <div className="p-12 text-center bg-[#242424] border border-[#2F2F2F] rounded-xl">
                     <div className="flex flex-col items-center gap-4">
-                      <div className="p-4 bg-red-100 dark:bg-red-900/30 rounded-full">
-                        <svg className="h-8 w-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className="p-4 bg-[#2F2F2F] rounded-full">
+                        <svg className="h-8 w-8 text-[#A0A0A0]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.34 16.5c-.77.833.192 2.5 1.732 2.5z" />
                         </svg>
                       </div>
                       <div>
-                        <p className="text-lg font-medium text-red-800 dark:text-red-200 mb-2">Error loading invoices</p>
-                        <p className="text-red-600 dark:text-red-300 text-sm">{invoicesError.message}</p>
-                        <p className="text-red-500 dark:text-red-400 text-xs mt-2">Check browser console for details</p>
+                        <p className="text-lg font-medium text-white mb-2">Error loading invoices</p>
+                        <p className="text-[#A0A0A0]">{invoicesError.message}</p>
                       </div>
                     </div>
                   </div>
                 ) : processedInvoices && processedInvoices.length > 0 ? (
                   <div className="divide-y divide-border">
                     {processedInvoices.map((invoice) => (
-                      <div key={invoice.id} className="px-6 py-4 hover:bg-muted/30 transition-colors">
-                        <div className="grid grid-cols-6 gap-4 text-sm">
+                      <div 
+                        key={invoice.id} 
+                        className="px-6 py-4 hover:bg-muted/30 transition-colors cursor-pointer group"
+                        onClick={() => setSelectedInvoice(invoice)}
+                      >
+                        <div className="grid grid-cols-6 gap-4 text-sm items-center">
                           <div className="font-medium text-foreground">
                             {invoice.invoiceNumber || 'N/A'}
                           </div>
@@ -970,8 +1233,9 @@ export default function Upload() {
                           <div className="text-muted-foreground">
                             {invoice.invoiceDate || 'N/A'}
                           </div>
-                          <div className="font-medium text-foreground">
+                          <div className="font-medium text-foreground flex items-center justify-between">
                             ${parseFloat(invoice.invoiceAmount || '0').toFixed(2)}
+                            <Eye className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                           </div>
                         </div>
                       </div>

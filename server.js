@@ -1193,12 +1193,19 @@ app.get('/api/invoices', (req, res) => {
         invoiceNumber: '',
         vendorCode: '',
         vendorName: '',
+        invoiceType: '',
         poNumber: '',
         jobNumber: '',
         woNumber: '',
         remarks: '',
         invoiceDate: '',
-        invoiceAmount: ''
+        invoiceAmount: '',
+        taxAmount: '',
+        shippingCharges: '',
+        amountBeforeTaxes: '',
+        distributionGLAccount: '',
+        phaseCode: '',
+        costType: ''
       };
 
       // Map columns based on the headers you specified
@@ -1214,6 +1221,9 @@ app.get('/api/invoices', (req, res) => {
             break;
           case 'Vendor_Name':
             invoice.vendorName = value.toString();
+            break;
+          case 'Invoice_Type':
+            invoice.invoiceType = value ? value.toString() : '';
             break;
           case 'PO_Number':
             invoice.poNumber = value ? value.toString() : '';
@@ -1232,6 +1242,24 @@ app.get('/api/invoices', (req, res) => {
             break;
           case 'Invoice_Amount':
             invoice.invoiceAmount = value ? value.toString() : '0.00';
+            break;
+          case 'Tax_Amount':
+            invoice.taxAmount = value ? value.toString() : '0.00';
+            break;
+          case 'Shipping_Charges':
+            invoice.shippingCharges = value ? value.toString() : '0.00';
+            break;
+          case 'Amount_Before_Taxes':
+            invoice.amountBeforeTaxes = value ? value.toString() : '0.00';
+            break;
+          case 'Distribution_GL_Account':
+            invoice.distributionGLAccount = value ? value.toString() : '';
+            break;
+          case 'Phase_Code':
+            invoice.phaseCode = value ? value.toString() : '';
+            break;
+          case 'Cost_Type':
+            invoice.costType = value ? value.toString() : '';
             break;
           default:
             // For any other columns, we might want to handle them
