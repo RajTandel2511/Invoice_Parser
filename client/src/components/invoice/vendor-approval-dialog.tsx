@@ -12,10 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-import { Check, X, AlertCircle, CheckCircle } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
+import { Check, X, AlertCircle, CheckCircle, Building2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface VendorMatch {
   TXT_File?: string;
@@ -153,12 +152,11 @@ export default function VendorApprovalDialog({
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-600" />
+            <Building2 className="h-5 w-5" />
             Vendor Match Approval
           </DialogTitle>
           <DialogDescription>
-            Processing has been paused. Review and edit the automatically matched vendors for your invoices. 
-            You can modify the Vendor Code and Vendor Name fields if needed. Processing will continue after you approve the matches.
+            Please review and approve the vendor matches. You can edit the Vendor Code and Vendor Name if needed. 
             <strong>Note: You must click "Approve All" or "Cancel" to continue processing.</strong>
           </DialogDescription>
         </DialogHeader>
@@ -174,77 +172,76 @@ export default function VendorApprovalDialog({
         </div>
 
         <div className="space-y-4">
-          {/* Vendor Matches List */}
-          <div className="space-y-3">
-            {editedMatches && editedMatches.length > 0 ? editedMatches.map((match, index) => {
+          {editedMatches && editedMatches.length > 0 ? (
+            editedMatches.map((match, index) => {
               const txtFile = match.TXT_File;
               
               return (
                 <Card 
                   key={index}
-                  className="transition-colors hover:bg-muted/50"
+                  className="border border-border"
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
-                      {/* Responsive layout with editable fields */}
-                      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium text-muted-foreground mb-1">File</div>
-                          <div className="font-semibold text-sm break-all">
-                            {txtFile ? txtFile.replace('.txt', '') : 'Unknown File'}
-                          </div>
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium text-muted-foreground mb-1">Vendor Code</div>
-                          <Input
-                            type="text"
-                            value={match.Vendor_Code || ''}
-                            onChange={(e) => handleUpdateMatch(index, 'Vendor_Code', e.target.value)}
-                            className="text-sm"
-                            placeholder="Enter vendor code"
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium text-muted-foreground mb-1">Vendor Name</div>
-                          <Input
-                            type="text"
-                            value={match.Vendor_Name || ''}
-                            onChange={(e) => handleUpdateMatch(index, 'Vendor_Name', e.target.value)}
-                            className="text-sm"
-                            placeholder="Enter vendor name"
-                          />
-                        </div>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">
+                      {txtFile ? txtFile.replace('.txt', '') : 'Unknown File'}
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Badge className={getMatchScoreColor(match.Address_Match_Score)}>
+                        {match.Address_Match_Score || '0'}% Match
+                      </Badge>
+                      {match.Matched_By && (
+                        <span className="text-xs text-muted-foreground">
+                          • {match.Matched_By}
+                        </span>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Vendor Code
+                        </label>
+                        <Input
+                          value={match.Vendor_Code || ''}
+                          onChange={(e) => handleUpdateMatch(index, 'Vendor_Code', e.target.value)}
+                          className="text-sm"
+                          placeholder="Enter vendor code"
+                        />
                       </div>
-                      
-                      {/* Match score badge */}
-                      <div className="flex flex-col items-end gap-1">
-                        <Badge className={getMatchScoreColor(match.Address_Match_Score)}>
-                          {match.Address_Match_Score || '0'}% Match
-                        </Badge>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Vendor Name
+                        </label>
+                        <Input
+                          value={match.Vendor_Name || ''}
+                          onChange={(e) => handleUpdateMatch(index, 'Vendor_Name', e.target.value)}
+                          className="text-sm"
+                          placeholder="Enter vendor name"
+                        />
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               );
-            }) : (
-              <div className="text-center py-8">
-                <p className="text-muted-foreground">No vendor matches available</p>
-              </div>
-            )}
-          </div>
+            })
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              No vendor matches found to review.
+            </div>
+          )}
         </div>
 
-        <DialogFooter>
-          <Button 
-            variant="outline" 
-            onClick={onClose} 
-            disabled={isApproving}
+        <DialogFooter className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={onClose}
             className="hover:bg-muted/50"
           >
             Cancel
           </Button>
-          <Button 
-            onClick={handleConfirm} 
+          <Button
+            onClick={handleConfirm}
             disabled={editedMatches.length === 0 || isApproving}
             className="bg-primary text-primary-foreground hover:bg-primary/90"
           >

@@ -174,58 +174,65 @@ export default function POApprovalDialog({
               return (
                 <Card 
                   key={`${fileName}-${index}`} 
-                  className="border border-gray-200"
+                  className="border border-border"
                 >
-                  <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
-                      
-                                             {/* Responsive layout with proper text wrapping */}
-                       <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-3">
-                         <div className="min-w-0">
-                           <div className="text-xs font-medium text-muted-foreground mb-1">File</div>
-                           <div className="font-semibold text-sm break-all">
-                             {fileName ? fileName.replace('.pdf', '') : 'Unknown File'}
-                           </div>
-                         </div>
-                         <div className="min-w-0">
-                           <div className="text-xs font-medium text-muted-foreground mb-1">PO Number</div>
-                           <Input
-                             value={match.PO_Number || ''}
-                             onChange={(e) => handleUpdateMatch(index, 'PO_Number', e.target.value)}
-                             className="text-sm"
-                             placeholder="Enter PO number"
-                           />
-                         </div>
-                         <div className="min-w-0">
-                           <div className="text-xs font-medium text-muted-foreground mb-1">Job Number</div>
-                           <Input
-                             value={match.Job_Number || ''}
-                             onChange={(e) => handleUpdateMatch(index, 'Job_Number', e.target.value)}
-                             className="text-sm"
-                             placeholder="Enter job number"
-                           />
-                         </div>
-                         <div className="min-w-0">
-                           <div className="text-xs font-medium text-muted-foreground mb-1">WO Number</div>
-                           <Input
-                             value={match.WO_Number || ''}
-                             onChange={(e) => handleUpdateMatch(index, 'WO_Number', e.target.value)}
-                             className="text-sm"
-                             placeholder="Enter WO number"
-                           />
-                         </div>
-                         <div className="min-w-0">
-                           <div className="text-xs font-medium text-muted-foreground mb-1">Remarks</div>
-                           <Input
-                             value={match.Remarks || ''}
-                             onChange={(e) => handleUpdateMatch(index, 'Remarks', e.target.value)}
-                             className="text-sm"
-                             placeholder="Enter remarks"
-                           />
-                         </div>
-                       </div>
-                      
-                                           </div>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium">
+                      {fileName ? fileName.replace('.pdf', '') : 'Unknown File'}
+                    </CardTitle>
+                    {match.extracted_po_number && (
+                      <p className="text-xs text-muted-foreground">
+                        Extracted PO: {match.extracted_po_number}
+                      </p>
+                    )}
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          PO Number
+                        </label>
+                        <Input
+                          value={match.PO_Number || ''}
+                          onChange={(e) => handleUpdateMatch(index, 'PO_Number', e.target.value)}
+                          className="text-sm"
+                          placeholder="Enter PO number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Job Number
+                        </label>
+                        <Input
+                          value={match.Job_Number || ''}
+                          onChange={(e) => handleUpdateMatch(index, 'Job_Number', e.target.value)}
+                          className="text-sm"
+                          placeholder="Enter job number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          WO Number
+                        </label>
+                        <Input
+                          value={match.WO_Number || ''}
+                          onChange={(e) => handleUpdateMatch(index, 'WO_Number', e.target.value)}
+                          className="text-sm"
+                          placeholder="Enter WO number"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          Remarks
+                        </label>
+                        <Input
+                          value={match.Remarks || ''}
+                          onChange={(e) => handleUpdateMatch(index, 'Remarks', e.target.value)}
+                          className="text-sm"
+                          placeholder="Enter remarks"
+                        />
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               );

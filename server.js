@@ -1143,9 +1143,10 @@ app.get('/api/invoices', (req, res) => {
     console.log('Fetching processed invoices from final_invoice_data.xlsx...');
     
     const filePath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'final_invoice_data.xlsx');
+    console.log('Looking for file at:', filePath);
     
     if (!fs.existsSync(filePath)) {
-      console.log('final_invoice_data.xlsx not found');
+      console.log('final_invoice_data.xlsx not found at:', filePath);
       return res.json({
         success: true,
         invoices: [],
@@ -1153,15 +1154,24 @@ app.get('/api/invoices', (req, res) => {
       });
     }
 
+    console.log('File found, reading Excel file...');
     // Read the Excel file
     const workbook = XLSX.readFile(filePath);
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     
+    console.log('Sheet name:', sheetName);
+    console.log('Available sheets:', workbook.SheetNames);
+    
     // Convert to JSON
     const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     
+    console.log('Raw data length:', rawData.length);
+    console.log('First row (headers):', rawData[0]);
+    console.log('Second row (sample data):', rawData[1]);
+    
     if (rawData.length < 2) {
+      console.log('Not enough data rows found');
       return res.json({
         success: true,
         invoices: [],
@@ -1172,6 +1182,9 @@ app.get('/api/invoices', (req, res) => {
     // Get headers from first row
     const headers = rawData[0];
     const dataRows = rawData.slice(1);
+    
+    console.log('Headers found:', headers);
+    console.log('Number of data rows:', dataRows.length);
 
     // Map the data to the expected format
     const invoices = dataRows.map((row, index) => {
@@ -1181,9 +1194,11 @@ app.get('/api/invoices', (req, res) => {
         vendorCode: '',
         vendorName: '',
         poNumber: '',
+        jobNumber: '',
+        woNumber: '',
+        remarks: '',
         invoiceDate: '',
-        invoiceAmount: '',
-        status: 'pending' // Default status
+        invoiceAmount: ''
       };
 
       // Map columns based on the headers you specified
@@ -1197,8 +1212,20 @@ app.get('/api/invoices', (req, res) => {
           case 'Vendor_Code':
             invoice.vendorCode = value.toString();
             break;
+          case 'Vendor_Name':
+            invoice.vendorName = value.toString();
+            break;
           case 'PO_Number':
-            invoice.poNumber = value ? value.toString() : null;
+            invoice.poNumber = value ? value.toString() : '';
+            break;
+          case 'Job_Number':
+            invoice.jobNumber = value ? value.toString() : '';
+            break;
+          case 'WO_Number':
+            invoice.woNumber = value ? value.toString() : '';
+            break;
+          case 'Remarks':
+            invoice.remarks = value ? value.toString() : '';
             break;
           case 'Invoice_Date':
             invoice.invoiceDate = value ? value.toString() : '';
@@ -1208,13 +1235,17 @@ app.get('/api/invoices', (req, res) => {
             break;
           default:
             // For any other columns, we might want to handle them
+            console.log('Unhandled column:', header, 'with value:', value);
             break;
         }
       });
 
-      // Set vendor name based on vendor code for now
-      invoice.vendorName = invoice.vendorCode;
+      // Set vendor name based on vendor code if not provided
+      if (!invoice.vendorName && invoice.vendorCode) {
+        invoice.vendorName = invoice.vendorCode;
+      }
 
+      console.log('Processed invoice:', invoice);
       return invoice;
     });
 
@@ -1229,7 +1260,8 @@ app.get('/api/invoices', (req, res) => {
     console.error('Error fetching invoices:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch processed invoices'
+      message: 'Failed to fetch processed invoices',
+      error: error.message
     });
   }
 });

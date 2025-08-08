@@ -1,15 +1,6 @@
 const getApiBaseUrl = () => {
-  // Use network IP if accessed via network, otherwise localhost
-  const hostname = window.location.hostname;
-  const port = 3002;
-  
-  // Check if we're on the network
-  if (hostname === '192.168.1.71' || hostname === '192.168.1.130') {
-    return `http://${hostname}:${port}/api`;
-  }
-  
-  // For localhost or any other local development
-  return `http://localhost:${port}/api`;
+  // Use relative URL for proxy configuration
+  return '/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
