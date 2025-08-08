@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Filter, Download, Eye } from "lucide-react";
+import { Search, Filter, Download } from "lucide-react";
 import { type Invoice } from "@shared/schema";
 import { formatCurrency, formatDate } from "@/lib/types";
 import { Card, CardContent } from "@/components/ui/card";
@@ -42,8 +42,9 @@ export default function Invoices() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
-  const { data: invoices = [], isLoading } = useQuery<Invoice[]>({
+  const { data: invoices = [], isLoading } = useQuery<{ success: boolean; invoices: Invoice[]; message: string }>({
     queryKey: ["/api/invoices"],
+    select: (data) => data.invoices || []
   });
 
   const filteredInvoices = invoices.filter(invoice => {
@@ -125,7 +126,6 @@ export default function Invoices() {
                   <TableHead className="font-semibold">Date</TableHead>
                   <TableHead className="font-semibold">Amount</TableHead>
                   <TableHead className="font-semibold">Status</TableHead>
-                  <TableHead className="font-semibold">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -135,13 +135,8 @@ export default function Invoices() {
                     <TableCell>{invoice.vendorName}</TableCell>
                     <TableCell>{invoice.poNumber || "-"}</TableCell>
                     <TableCell>{formatDate(invoice.invoiceDate)}</TableCell>
-                    <TableCell className="font-semibold">{formatCurrency(invoice.totalAmount)}</TableCell>
+                    <TableCell className="font-semibold">{formatCurrency(invoice.invoiceAmount)}</TableCell>
                     <TableCell>{getStatusBadge(invoice.status)}</TableCell>
-                    <TableCell>
-                      <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

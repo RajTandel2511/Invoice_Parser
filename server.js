@@ -5,6 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
+import XLSX from 'xlsx';
 
 const app = express();
 const PORT = 3002;
@@ -142,6 +143,39 @@ app.get('/api/files/:filename', (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error downloading file',
+      error: error.message
+    });
+  }
+});
+
+// Delete file endpoint
+app.delete('/api/files/:filename', (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(uploadsDir, filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+    }
+
+    // Delete the file
+    fs.unlinkSync(filePath);
+    
+    console.log(`File deleted: ${filename}`);
+
+    res.json({
+      success: true,
+      message: 'File deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Delete error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error deleting file',
       error: error.message
     });
   }
@@ -1099,6 +1133,103 @@ app.post('/api/approve-po-matches', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to approve PO matches'
+    });
+  }
+});
+
+// Get processed invoices from final_invoice_data.xlsx
+app.get('/api/invoices', (req, res) => {
+  try {
+    console.log('Fetching processed invoices from final_invoice_data.xlsx...');
+    
+    const filePath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'final_invoice_data.xlsx');
+    
+    if (!fs.existsSync(filePath)) {
+      console.log('final_invoice_data.xlsx not found');
+      return res.json({
+        success: true,
+        invoices: [],
+        message: 'No processed invoices found. Please process invoices first.'
+      });
+    }
+
+    // Read the Excel file
+    const workbook = XLSX.readFile(filePath);
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    
+    // Convert to JSON
+    const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    
+    if (rawData.length < 2) {
+      return res.json({
+        success: true,
+        invoices: [],
+        message: 'No invoice data found in the Excel file'
+      });
+    }
+
+    // Get headers from first row
+    const headers = rawData[0];
+    const dataRows = rawData.slice(1);
+
+    // Map the data to the expected format
+    const invoices = dataRows.map((row, index) => {
+      const invoice = {
+        id: (index + 1).toString(),
+        invoiceNumber: '',
+        vendorCode: '',
+        vendorName: '',
+        poNumber: '',
+        invoiceDate: '',
+        invoiceAmount: '',
+        status: 'pending' // Default status
+      };
+
+      // Map columns based on the headers you specified
+      headers.forEach((header, colIndex) => {
+        const value = row[colIndex] || '';
+        
+        switch (header) {
+          case 'Invoice_Number':
+            invoice.invoiceNumber = value.toString();
+            break;
+          case 'Vendor_Code':
+            invoice.vendorCode = value.toString();
+            break;
+          case 'PO_Number':
+            invoice.poNumber = value ? value.toString() : null;
+            break;
+          case 'Invoice_Date':
+            invoice.invoiceDate = value ? value.toString() : '';
+            break;
+          case 'Invoice_Amount':
+            invoice.invoiceAmount = value ? value.toString() : '0.00';
+            break;
+          default:
+            // For any other columns, we might want to handle them
+            break;
+        }
+      });
+
+      // Set vendor name based on vendor code for now
+      invoice.vendorName = invoice.vendorCode;
+
+      return invoice;
+    });
+
+    console.log(`Returning ${invoices.length} invoices from Excel file`);
+    
+    res.json({
+      success: true,
+      invoices: invoices,
+      message: `Found ${invoices.length} processed invoices`
+    });
+  } catch (error) {
+    console.error('Error fetching invoices:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch processed invoices'
     });
   }
 });

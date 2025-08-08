@@ -11,6 +11,7 @@ import { api } from '@/lib/api';
 import { LoadingAnimation } from '@/components/LoadingAnimation';
 import VendorApprovalDialog from '@/components/invoice/vendor-approval-dialog';
 import POApprovalDialog from '@/components/invoice/po-approval-dialog';
+import UploadedFilesDialog from '@/components/invoice/uploaded-files-dialog';
 
 interface UploadedFile {
   filename: string;
@@ -59,8 +60,21 @@ export default function Upload() {
   const [poMatches, setPOMatches] = useState<POMatch[]>([]);
   const [hasShownPOApprovalDialog, setHasShownPOApprovalDialog] = useState(false);
   const [lastSeenPODataHash, setLastSeenPODataHash] = useState<string>('');
+  const [showUploadedFilesDialog, setShowUploadedFilesDialog] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Function to refresh uploaded files list
+  const refreshUploadedFiles = async () => {
+    try {
+      const result = await api.getUploadedFiles();
+      if (result.success && result.files) {
+        setUploadedFiles(result.files);
+      }
+    } catch (error) {
+      console.error('Error fetching uploaded files:', error);
+    }
+  };
 
   // Function to create a hash of vendor matches data to detect changes
   const createDataHash = (matches: VendorMatch[]): string => {
@@ -765,46 +779,28 @@ export default function Upload() {
                   Download Files
                 </Button>
               </div>
+              
+              {/* View Uploaded Files Button */}
+              <div className="mt-3">
+                <Button 
+                  onClick={() => setShowUploadedFilesDialog(true)}
+                  variant="outline"
+                  className="w-full shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  View Uploaded Files ({uploadedFiles.length})
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Upload Status */}
-          <Card className="shadow-sm border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Uploaded Files ({uploadedFiles.length})
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {uploadedFiles.length === 0 ? (
-                <div className="text-center py-8">
-                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-sm text-muted-foreground">No files uploaded yet</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {uploadedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="font-medium text-sm">{file.filename}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {(file.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="shadow-sm">
-                        {file.filename.endsWith('.pdf') ? 'PDF' : 'Image'}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
+          {/* Uploaded Files Dialog */}
+          <UploadedFilesDialog
+            isOpen={showUploadedFilesDialog}
+            onClose={() => setShowUploadedFilesDialog(false)}
+            uploadedFiles={uploadedFiles}
+            onFileDeleted={refreshUploadedFiles}
+          />
 
         </div>
       </div>

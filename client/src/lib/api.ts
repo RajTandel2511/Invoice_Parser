@@ -62,6 +62,29 @@ export const api = {
     }
   },
 
+  // Delete uploaded file
+  async deleteFile(filename: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/files/${encodeURIComponent(filename)}`, {
+        method: 'DELETE',
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to delete file');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Delete file error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to delete file'
+      };
+    }
+  },
+
   // Process invoices
   async processInvoices(): Promise<{ success: boolean; message: string; files?: string[]; stdout?: string; stderr?: string; vendorMatches?: any[] }> {
     try {
