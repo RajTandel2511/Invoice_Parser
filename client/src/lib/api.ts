@@ -379,5 +379,49 @@ export const api = {
         message: error instanceof Error ? error.message : 'Failed to check uploads folder'
       };
     }
+  },
+
+  // Get PDF page information
+  async getPDFPages(): Promise<{ success: boolean; pdfFiles?: any[]; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/pdf-pages`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get PDF page information');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Get PDF pages error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get PDF page information'
+      };
+    }
+  },
+
+  // Get PDF file for thumbnail generation
+  async getPDFFile(filename: string): Promise<{ success: boolean; blob?: Blob; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/pdf-file/${encodeURIComponent(filename)}`);
+      
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || 'Failed to get PDF file');
+      }
+
+      const blob = await response.blob();
+      return {
+        success: true,
+        blob
+      };
+    } catch (error) {
+      console.error('Get PDF file error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get PDF file'
+      };
+    }
   }
 }; 

@@ -12,6 +12,7 @@ import { LoadingAnimation } from '@/components/LoadingAnimation';
 import VendorApprovalDialog from '@/components/invoice/vendor-approval-dialog';
 import POApprovalDialog from '@/components/invoice/po-approval-dialog';
 import UploadedFilesDialog from '@/components/invoice/uploaded-files-dialog';
+import PagePreview from '@/components/invoice/page-preview';
 import {
   Dialog,
   DialogContent,
@@ -328,6 +329,7 @@ export default function Upload() {
   const [processingProgress, setProcessingProgress] = useState(0);
   const [processedCount, setProcessedCount] = useState(0);
   const [selectedInvoice, setSelectedInvoice] = useState<ProcessedInvoice | null>(null);
+  const [showPagePreview, setShowPagePreview] = useState(false);
   
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1099,8 +1101,30 @@ export default function Upload() {
                   View Uploaded Files ({uploadedFiles.length})
                 </Button>
               </div>
+              
+              {/* Page Preview Toggle Button */}
+              {uploadedFiles.filter(f => f.filename.toLowerCase().endsWith('.pdf')).length > 0 && (
+                <div className="mt-3">
+                  <Button 
+                    onClick={() => setShowPagePreview(!showPagePreview)}
+                    variant="outline"
+                    className="w-full shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <Eye className="h-4 w-4 mr-2" />
+                    {showPagePreview ? 'Hide' : 'Show'} Page Preview
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
+
+          {/* Page Preview Section */}
+          {showPagePreview && uploadedFiles.filter(f => f.filename.toLowerCase().endsWith('.pdf')).length > 0 && (
+            <PagePreview 
+              uploadedFiles={uploadedFiles}
+              onClose={() => setShowPagePreview(false)}
+            />
+          )}
 
           {/* Processed Invoice Section */}
           <Card className="shadow-lg border-border bg-gradient-to-br from-background to-muted/20 w-full">

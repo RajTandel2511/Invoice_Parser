@@ -235,29 +235,37 @@ If any field is unclear or missing, return it as an empty string `""`. Do not gu
    - Look for: "Total Due", "Invoice Amount", "Amount Due", "Balance Due"
    - ⛔ Avoid: "Subtotal", "Tax", "Discount", "Previous Balance"
    - Extract the **largest visible amount** from valid labels
+   - CRITICAL: Preserve decimal points exactly as they appear (e.g., "48529.29" should remain "48529.29", not "4852929")
    - Remove symbols: `$`, `,`, `%`, `(`, `)`
    - Only treat the amount as negative if a clear `-` appears directly in front of the number — parentheses alone do not imply negative
+   - Example: If you see "$48,529.29", extract "48529.29"
 
 5. **Amount_Before_Taxes**
    - Look for: "Subtotal", "Amount Before Tax", "Total Before Tax"
    - ⛔ Avoid: "Tax", "Total Due", "Invoice Total", "Balance Due"
+   - CRITICAL: Preserve decimal points exactly as they appear
    - Remove symbols: `$`, `,`, `%`, `(`, `)`
    - Only treat the amount as negative if a clear `-` appears directly in front of the number — parentheses alone do not imply negative
+   - Example: If you see "$45,000.00", extract "45000.00"
 
 6. **Tax_Amount**
    - Look for: "Sales Tax", "Tax", "Tax Amount", "VAT"
    - ⛔ Avoid: "Total", "Subtotal", "Before Tax", "After Tax"
    - Extract the first valid amount shown near the correct label — even if negative
+   - CRITICAL: Preserve decimal points exactly as they appear
    - Include negative sign if a clear `-` appears directly in front of the number
    - Remove all symbols: `$`, `,`, `%`, `(`, `)`
    - Only treat the amount as negative if a clear `-` appears directly in front of the number — parentheses alone do not imply negative
+   - Example: If you see "$3,529.29", extract "3529.29"
 
 7. **Shipping_Charges**
    - Look for: "Shipping", "Freight", "Delivery", "Handling", "S&H", "Shipping & Handling"
    - Extract the amount shown next to these labels
+   - CRITICAL: Preserve decimal points exactly as they appear
    - Remove symbols: `$`, `,`, `%`, `(`, `)`
    - Only treat as negative if a clear `-` appears directly in front of the number
    - If no shipping charges found, return empty string
+   - Example: If you see "$25.50", extract "25.50"
 
 ---
 
@@ -265,14 +273,16 @@ If any field is unclear or missing, return it as an empty string `""`. Do not gu
 - If Tax_Amount is present and greater than 0, then Invoice_Amount and Amount_Before_Taxes **must be different**, based on the actual visible values
 - Never extract the same amount for both fields if Tax_Amount is present
 - Only use amounts shown clearly next to their correct labels — no guessing or assumptions
+- CRITICAL: Never hallucinate amounts that are not clearly visible in the OCR text
 
 ---
 
 📏 OUTPUT RULES:
 - Dates must be in MM/DD/YY format
-- Amounts are clean numbers without formatting
+- Amounts are clean numbers without formatting but WITH decimal points preserved
 - Parentheses do not imply negative unless a clear `-` is present
 - Return a clean JSON with exactly the 7 fields — no extra text or formatting
+- CRITICAL: Only extract amounts that are explicitly visible in the OCR text
 
 ---
 
@@ -314,15 +324,15 @@ def clean_amount(val):
     if val == "" or val is None:
         return None
     val = str(val)  # Ensure it's a string before .replace()
-    return round(float(
-        val.replace("$", "")
-           .replace(",", "")
-           .replace("(", "")
-           .replace(")", "")
-           .replace("%", "")
-           .replace("USD", "")
-           .strip()
-    ), 2)
+    # Remove currency symbols and formatting, but preserve decimal points
+    cleaned = val.replace("$", "").replace(",", "").replace("(", "").replace(")", "").replace("%", "").replace("USD", "").strip()
+    
+    try:
+        # Convert to float and format with 2 decimal places
+        float_val = float(cleaned)
+        return f"{float_val:.2f}"
+    except ValueError:
+        return None
 
 def amount_exists_in_text(amount, ocr_text):
     """Check if a specific amount exists in OCR text with 2 decimal formatting"""
@@ -342,34 +352,39 @@ def correct_amounts(result_json, ocr_text):
             continue
     ocr_amounts = set(ocr_amounts)
 
+    # Convert string amounts to floats for numerical comparisons
+    A_float = float(A) if A and A.replace('.', '').replace('-', '').isdigit() else None
+    B_float = float(B) if B and B.replace('.', '').replace('-', '').isdigit() else None
+    C_float = float(C) if C and C.replace('.', '').replace('-', '').isdigit() else None
+
     # Fix: If Tax_Amount present & Invoice_Amount == Amount_Before_Taxes
-    if C and C > 0 and A == B and A is not None:
-        estimated_B = round(A - C, 2)
+    if C_float and C_float > 0 and A_float == B_float and A_float is not None:
+        estimated_B = round(A_float - C_float, 2)
         if estimated_B in ocr_amounts:
-            B = estimated_B
-            result_json["Amount_Before_Taxes"] = str(B)
+            B = str(estimated_B)
+            result_json["Amount_Before_Taxes"] = B
         else:
             result_json["Amount_Before_Taxes"] = ""
 
     # Recover missing amounts
-    if A is None and B is not None and C is not None:
-        estimated_A = round(B + C, 2)
+    if A_float is None and B_float is not None and C_float is not None:
+        estimated_A = round(B_float + C_float, 2)
         if estimated_A in ocr_amounts:
-            A = estimated_A
-            result_json["Invoice_Amount"] = str(A)
+            A = str(estimated_A)
+            result_json["Invoice_Amount"] = A
 
-    if B is None and A is not None and C is not None:
-        estimated_B = round(A - C, 2)
+    if B_float is None and A_float is not None and C_float is not None:
+        estimated_B = round(A_float - C_float, 2)
         if estimated_B in ocr_amounts:
-            B = estimated_B
-            result_json["Amount_Before_Taxes"] = str(B)
+            B = str(estimated_B)
+            result_json["Amount_Before_Taxes"] = B
 
     # Final Logical Check
-    if A and B and C:
-        if not (A > B and A > C and B >= 0 and C >= 0):
-            result_json["Invoice_Amount"] = str(A) if A else ""
-            result_json["Amount_Before_Taxes"] = str(B) if B and A > B else ""
-            result_json["Tax_Amount"] = str(C) if C and A > C else ""
+    if A_float and B_float and C_float:
+        if not (A_float > B_float and A_float > C_float and B_float >= 0 and C_float >= 0):
+            result_json["Invoice_Amount"] = A if A else ""
+            result_json["Amount_Before_Taxes"] = B if B and A_float > B_float else ""
+            result_json["Tax_Amount"] = C if C and A_float > C_float else ""
 
     return result_json
 
@@ -1634,27 +1649,72 @@ df = df.merge(
     how='left'
 )
 
+# Define cleaning functions before they are used
 def clean_invoice_amount(value):
     try:
-        return str(value).replace('$', '').replace(',', '').strip()
+        # Remove currency symbols and commas, but preserve decimal points
+        cleaned = str(value).replace('$', '').replace(',', '').strip()
+        # Ensure proper decimal formatting
+        if cleaned and '.' in cleaned:
+            # Convert to float and back to string to ensure proper decimal format
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        elif cleaned:
+            # If no decimal point, assume it's a whole number
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        return cleaned
     except:
         return value
 
 def clean_amount_before_taxes(value):
     try:
-        return str(value).replace('$', '').replace(',', '').strip()
+        # Remove currency symbols and commas, but preserve decimal points
+        cleaned = str(value).replace('$', '').replace(',', '').strip()
+        # Ensure proper decimal formatting
+        if cleaned and '.' in cleaned:
+            # Convert to float and back to string to ensure proper decimal format
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        elif cleaned:
+            # If no decimal point, assume it's a whole number
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        return cleaned
     except:
         return value
 
 def clean_tax_amount(value):
     try:
-        return str(value).replace('$', '').replace(',', '').strip()
+        # Remove currency symbols and commas, but preserve decimal points
+        cleaned = str(value).replace('$', '').replace(',', '').strip()
+        # Ensure proper decimal formatting
+        if cleaned and '.' in cleaned:
+            # Convert to float and back to string to ensure proper decimal format
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        elif cleaned:
+            # If no decimal point, assume it's a whole number
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        return cleaned
     except:
         return value
 
 def clean_shipping_charges(value):
     try:
-        return str(value).replace('$', '').replace(',', '').strip()
+        # Remove currency symbols and commas, but preserve decimal points
+        cleaned = str(value).replace('$', '').replace(',', '').strip()
+        # Ensure proper decimal formatting
+        if cleaned and '.' in cleaned:
+            # Convert to float and back to string to ensure proper decimal format
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        elif cleaned:
+            # If no decimal point, assume it's a whole number
+            float_val = float(cleaned)
+            return f"{float_val:.2f}"
+        return cleaned
     except:
         return value
 
@@ -1668,14 +1728,22 @@ def determine_invoice_type(amount_str):
 def clean_amount_for_credit(amount_str, invoice_type):
     """Clean amount and make it positive if it's a credit invoice"""
     try:
+        # Remove currency symbols and commas, but preserve decimal points
         cleaned = str(amount_str).replace('$', '').replace(',', '').strip()
-        if cleaned and invoice_type == 'C':
-            # For credit invoices, make amount positive (remove minus sign)
-            return str(abs(float(cleaned)))
+        if cleaned:
+            float_val = float(cleaned)
+            if invoice_type == 'C':
+                # For credit invoices, make amount positive (remove minus sign)
+                return f"{abs(float_val):.2f}"
+            else:
+                return f"{float_val:.2f}"
         return cleaned
     except:
         return amount_str
 
+
+
+# Clean amount fields to preserve decimal points
 df['Invoice_Amount'] = df['Invoice_Amount'].apply(clean_invoice_amount)
 df['Amount_Before_Taxes'] = df['Amount_Before_Taxes'].apply(clean_amount_before_taxes)
 df['Tax_Amount'] = df['Tax_Amount'].apply(clean_tax_amount)
@@ -1692,10 +1760,6 @@ df['Invoice_Type'] = df['Invoice_Amount'].apply(determine_invoice_type)
 df['Invoice_Amount'] = df.apply(lambda row: clean_amount_for_credit(row['Invoice_Amount'], row['Invoice_Type']), axis=1)
 df['Amount_Before_Taxes'] = df.apply(lambda row: clean_amount_for_credit(row['Amount_Before_Taxes'], row['Invoice_Type']), axis=1)
 df['Tax_Amount'] = df.apply(lambda row: clean_amount_for_credit(row['Tax_Amount'], row['Invoice_Type']), axis=1)
-
-# Update GL_Date based on Invoice_Date logic
-# If GL_Date is empty, use Invoice_Date
-# If GL_Date exists but doesn't match Invoice_Date, replace with Invoice_Date
 
 # Function to handle multiple date formats and convert to MM/DD/YY
 def convert_date_to_mm_dd_yy(date_str):

@@ -6,6 +6,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import XLSX from 'xlsx';
+import { PDFDocument } from 'pdf-lib';
 
 const app = express();
 const PORT = 3002;
@@ -1289,6 +1290,98 @@ app.get('/api/invoices', (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch processed invoices',
+      error: error.message
+    });
+  }
+});
+
+// Get PDF file for thumbnail generation
+app.get('/api/pdf-file/:filename', (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(uploadsDir, filename);
+    
+    // Check if file exists and is a PDF
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'PDF file not found'
+      });
+    }
+    
+    if (!filename.toLowerCase().endsWith('.pdf')) {
+      return res.status(400).json({
+        success: false,
+        message: 'File is not a PDF'
+      });
+    }
+    
+    // Set appropriate headers for PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    
+    // Stream the PDF file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+    
+  } catch (error) {
+    console.error('Error serving PDF file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to serve PDF file',
+      error: error.message
+    });
+  }
+});
+
+// Get PDF page information
+app.get('/api/pdf-pages', async (req, res) => {
+  try {
+    console.log('Getting PDF page information...');
+    
+    const files = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'))
+      .filter(file => {
+        const filePath = path.join(uploadsDir, file);
+        const stats = fs.statSync(filePath);
+        return stats.isFile() && file.toLowerCase().endsWith('.pdf');
+      });
+    
+    const pdfInfo = [];
+    
+    for (const filename of files) {
+      try {
+        const filePath = path.join(uploadsDir, filename);
+        const fileBuffer = fs.readFileSync(filePath);
+        const pdfDoc = await PDFDocument.load(fileBuffer);
+        const pageCount = pdfDoc.getPageCount();
+        
+        pdfInfo.push({
+          filename,
+          pageCount,
+          path: filePath
+        });
+        
+        console.log(`PDF ${filename}: ${pageCount} pages`);
+      } catch (error) {
+        console.error(`Error reading PDF ${filename}:`, error);
+        // If we can't read the PDF, we'll skip it
+        continue;
+      }
+    }
+    
+    console.log(`Found ${pdfInfo.length} PDF files with page information`);
+    
+    res.json({
+      success: true,
+      pdfFiles: pdfInfo,
+      message: `Found ${pdfInfo.length} PDF file(s)`
+    });
+  } catch (error) {
+    console.error('Error getting PDF page information:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get PDF page information',
       error: error.message
     });
   }
