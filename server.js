@@ -1778,8 +1778,7 @@ app.post('/api/clear-all-folders', (req, res) => {
   try {
     const foldersToClear = [
       uploadsDir,
-      path.join(__dirname, 'split_pages'),
-      path.join(__dirname, 'manual_split_pages')
+      path.join(__dirname, 'split_pages')
     ];
     
     const clearedFolders = [];
@@ -2231,7 +2230,19 @@ class EmailMonitor {
             });
             stream.on('end', () => {
               attachmentData = Buffer.concat(chunks);
-              console.log(`Attachment data received: ${attachmentData.length} bytes`);
+              console.log(`📥 Attachment data received: ${attachmentData.length} bytes`);
+              
+              // Debug: Check if the data looks like base64
+              const sampleData = attachmentData.toString('utf8').substring(0, 100);
+              console.log(`🔍 Sample data preview: ${sampleData}...`);
+              
+              // Check if it's likely base64 encoded
+              if (sampleData.match(/^[A-Za-z0-9+/]*={0,2}$/)) {
+                console.log(`⚠️ WARNING: Attachment appears to be base64 encoded text, not binary!`);
+                console.log(`📧 This suggests Gmail is sending the PDF as encoded text in the email body.`);
+              } else {
+                console.log(`✅ Attachment appears to be binary data (good!)`);
+              }
               
               // Process the attachment
               this.processEmailContent(emailText, headerBuffer, attachment, attachmentData, emailId);
@@ -2290,6 +2301,78 @@ class EmailMonitor {
         console.log(`Attachment type: ${attachmentType}`);
         console.log(`Attachment size: ${attachmentData.length} bytes`);
         
+        // CRITICAL FIX: Check if the attachment data is base64 encoded
+        let finalAttachmentData = attachmentData;
+        let isBase64Encoded = false;
+        
+        // Check if the data looks like base64 (contains only base64 characters)
+        const dataString = attachmentData.toString('utf8');
+        
+        // Improved base64 detection: check for base64 patterns and Gmail encoding hints
+        const base64Pattern = /^[A-Za-z0-9+/=\s\n\r]*$/;
+        const hasBase64Chars = dataString.match(/[A-Za-z0-9+/=]/g);
+        const base64CharRatio = hasBase64Chars ? hasBase64Chars.length / dataString.length : 0;
+        
+        // Check if Gmail structure indicates BASE64 encoding
+        const gmailIndicatesBase64 = attachment.encoding && attachment.encoding.toUpperCase() === 'BASE64';
+        
+        console.log(`🔍 Base64 detection analysis:`);
+        console.log(`  - Gmail encoding: ${attachment.encoding || 'unknown'}`);
+        console.log(`  - Base64 pattern match: ${base64Pattern.test(dataString)}`);
+        console.log(`  - Base64 character ratio: ${(base64CharRatio * 100).toFixed(1)}%`);
+        console.log(`  - Data length: ${dataString.length} characters`);
+        
+        if ((base64Pattern.test(dataString) && base64CharRatio > 0.95) || gmailIndicatesBase64) {
+          console.log(`🔍 Detected base64 encoded attachment - decoding to binary...`);
+          isBase64Encoded = true;
+          
+          try {
+            // Clean the data by removing whitespace and line breaks
+            const cleanBase64 = dataString.replace(/[\s\n\r]/g, '');
+            console.log(`🧹 Cleaned base64 data: ${dataString.length} → ${cleanBase64.length} characters`);
+            
+            // Decode base64 back to binary
+            finalAttachmentData = Buffer.from(cleanBase64, 'base64');
+            console.log(`✅ Base64 decoded: ${cleanBase64.length} chars → ${finalAttachmentData.length} bytes`);
+            
+            // Verify the decoded data looks like a PDF
+            const pdfHeader = finalAttachmentData.toString('ascii', 0, 4);
+            if (pdfHeader === '%PDF') {
+              console.log(`🎯 Perfect! Decoded data has valid PDF header: ${pdfHeader}`);
+            } else {
+              console.log(`⚠️ Warning: Decoded data doesn't have PDF header: ${pdfHeader}`);
+            }
+            
+          } catch (decodeError) {
+            console.error(`❌ Base64 decode failed:`, decodeError);
+            console.log(`⚠️ Falling back to original data`);
+            finalAttachmentData = attachmentData;
+          }
+        } else {
+          console.log(`✅ Attachment appears to be binary data (not base64 encoded)`);
+          
+          // Fallback: Try to decode as base64 anyway to see if it works
+          // Sometimes Gmail sends base64 data that doesn't match our patterns exactly
+          try {
+            const testDecode = Buffer.from(dataString.replace(/[\s\n\r]/g, ''), 'base64');
+            const testHeader = testDecode.toString('ascii', 0, 4);
+            
+            if (testHeader === '%PDF' && testDecode.length < attachmentData.length) {
+              console.log(`🔄 Fallback detection: Data decodes to valid PDF header: ${testHeader}`);
+              console.log(`📊 Size reduction: ${attachmentData.length} → ${testDecode.length} bytes`);
+              console.log(`🔍 This suggests the data was actually base64 encoded!`);
+              
+              // Use the decoded data
+              finalAttachmentData = testDecode;
+              isBase64Encoded = true;
+              
+              console.log(`✅ Using fallback decoded data for PDF`);
+            }
+          } catch (fallbackError) {
+            console.log(`ℹ️ Fallback decode test failed (expected for true binary data)`);
+          }
+        }
+        
         // Save attachment to a new folder for email attachments (not uploads)
         try {
           const fs = await import('fs');
@@ -2300,16 +2383,31 @@ class EmailMonitor {
           if (!fs.existsSync(emailAttachmentsDir)) {
             fs.mkdirSync(emailAttachmentsDir, { recursive: true });
           }
+          
+          // IMPORTANT: Save the DECODED binary data directly - no conversion!
+          // This preserves the exact PDF format for your model
           const emailAttachmentPath = path.join(emailAttachmentsDir, attachmentName);
-          fs.writeFileSync(emailAttachmentPath, attachmentData);
-          console.log(`Saved email attachment to email_attachments folder: ${emailAttachmentPath}`);
+          fs.writeFileSync(emailAttachmentPath, finalAttachmentData);
+          console.log(`✅ Saved ORIGINAL PDF to email_attachments folder: ${emailAttachmentPath}`);
+          console.log(`📊 File size: ${finalAttachmentData.length} bytes (preserved original format)`);
+          
+          // Verify PDF integrity to ensure original format is preserved
+          if (attachmentType.toLowerCase() === 'pdf') {
+            const isIntegrityValid = await this.verifyPDFIntegrity(emailAttachmentPath, finalAttachmentData.length);
+            if (isIntegrityValid) {
+              console.log(`🎯 PDF integrity confirmed - ready for model processing!`);
+            } else {
+              console.log(`⚠️ PDF integrity check failed - file may be corrupted`);
+            }
+          }
           
         } catch (saveError) {
-          console.error(`Error saving email attachment to file:`, saveError);
+          console.error(`❌ Error saving email attachment to file:`, saveError);
         }
         
-        // Convert attachment to base64 for display
-        const base64Attachment = attachmentData.toString('base64');
+        // Convert attachment to base64 ONLY for display purposes (not for file saving)
+        // The actual file saved above is the DECODED binary PDF
+        const base64Attachment = finalAttachmentData.toString('base64');
         
         // Create invoice object for display
         const invoiceData = {
@@ -2324,7 +2422,8 @@ class EmailMonitor {
           isImage: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(attachmentType.toLowerCase()),
           isPDF: attachmentType.toLowerCase() === 'pdf',
           filePath: `email_attachments/${attachmentName}`,
-          status: 'pending_approval' // Mark as pending until moved to uploads
+          status: 'pending_approval', // Mark as pending until moved to uploads
+          wasBase64Encoded: isBase64Encoded // Track if we had to decode it
         };
         
         // Add to extracted invoices list
@@ -2355,6 +2454,41 @@ class EmailMonitor {
         console.error('Error marking email as read:', err);
       }
     });
+  }
+
+  // Verify PDF integrity to ensure original format is preserved
+  async verifyPDFIntegrity(filePath, originalSize) {
+    try {
+      const fs = await import('fs');
+      if (!fs.existsSync(filePath)) {
+        console.log(`❌ File not found: ${filePath}`);
+        return false;
+      }
+
+      const stats = fs.statSync(filePath);
+      if (stats.size !== originalSize) {
+        console.log(`❌ File size mismatch: expected ${originalSize}, got ${stats.size}`);
+        return false;
+      }
+
+      // Check if it's a valid PDF by reading the first 4 bytes
+      const fd = fs.openSync(filePath, 'r');
+      const buffer = Buffer.alloc(4);
+      fs.readSync(fd, buffer, 0, 4, 0);
+      fs.closeSync(fd);
+
+      const header = buffer.toString('ascii');
+      if (header === '%PDF') {
+        console.log(`✅ PDF integrity verified: ${filePath} (${stats.size} bytes, valid PDF header)`);
+        return true;
+      } else {
+        console.log(`❌ Invalid PDF header: ${header} in ${filePath}`);
+        return false;
+      }
+    } catch (error) {
+      console.error(`❌ Error verifying PDF integrity:`, error);
+      return false;
+    }
   }
 }
 
@@ -2470,63 +2604,16 @@ app.post('/api/email-monitor/check-now', (req, res) => {
 // Clear extracted invoices
 app.delete('/api/email-monitor/invoices', (req, res) => {
   try {
-    console.log('Clearing email attachments folder...');
-    
-    const emailAttachmentsDir = path.join(__dirname, 'email_attachments');
-    
-    if (!fs.existsSync(emailAttachmentsDir)) {
-      return res.json({
-        success: true,
-        message: 'Email attachments folder does not exist',
-        clearedFiles: 0
-      });
-    }
-    
-    // Get all files in email_attachments folder
-    const files = fs.readdirSync(emailAttachmentsDir)
-      .filter(file => !file.startsWith('.') && (file.endsWith('.pdf') || file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')));
-    
-    console.log(`Found ${files.length} email attachments to clear`);
-    
-    if (files.length === 0) {
-      return res.json({
-        success: true,
-        message: 'No email attachments found to clear',
-        clearedFiles: 0
-      });
-    }
-    
-    // Delete all files from email_attachments folder
-    let clearedFiles = 0;
-    files.forEach(file => {
-      try {
-        const filePath = path.join(emailAttachmentsDir, file);
-        if (fs.statSync(filePath).isFile()) {
-          fs.unlinkSync(filePath);
-          console.log(`Deleted email attachment: ${file}`);
-          clearedFiles++;
-        }
-      } catch (error) {
-        console.error(`Error deleting file ${file}:`, error);
-      }
-    });
-    
-    // Clear the in-memory extracted invoices array
     extractedInvoices = [];
-    
-    console.log(`Successfully cleared ${clearedFiles} email attachments`);
-    
     res.json({
       success: true,
-      message: `Successfully cleared ${clearedFiles} email attachments`,
-      clearedFiles: clearedFiles
+      message: 'All extracted invoices cleared'
     });
-    
   } catch (error) {
-    console.error('Error clearing email attachments:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to clear email attachments'
+      message: 'Failed to clear extracted invoices',
+      error: error.message
     });
   }
 });
@@ -2643,12 +2730,24 @@ app.post('/api/move-email-attachments', async (req, res) => {
       const destPath = path.join(uploadsDir, file);
       
       try {
+        // Get file stats before moving to verify integrity
+        const sourceStats = fs.statSync(sourcePath);
+        console.log(`📁 Moving file: ${file} (${sourceStats.size} bytes)`);
+        
         fs.copyFileSync(sourcePath, destPath);
+        
+        // Verify the copied file has the same size (integrity check)
+        const destStats = fs.statSync(destPath);
+        if (sourceStats.size === destStats.size) {
+          console.log(`✅ File moved successfully: ${file} (${destStats.size} bytes - format preserved)`);
+        } else {
+          console.log(`⚠️ Warning: File size mismatch after move: ${file} (source: ${sourceStats.size}, dest: ${destStats.size})`);
+        }
+        
         fs.unlinkSync(sourcePath); // Remove from email_attachments
         movedFiles.push(file);
-        console.log(`Moved email attachment: ${file}`);
       } catch (error) {
-        console.error(`Error moving file ${file}:`, error);
+        console.error(`❌ Error moving file ${file}:`, error);
       }
     }
     

@@ -1,6 +1,6 @@
 const getApiBaseUrl = () => {
-  // Use the correct backend server URL
-  return 'http://192.168.1.70:3002/api';
+  // Use relative URL for proxy configuration
+  return '/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -558,13 +558,7 @@ export const api = {
   // Clear all folders
   async clearAllFolders(): Promise<{ success: boolean; message?: string; clearedFolders?: string[] }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/clear-all-folders`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
+      const response = await fetch(`${API_BASE_URL}/clear-all-folders`);
       const result = await response.json();
       
       if (!response.ok) {

@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Eye,
   Calendar,
-  User
+  User,
+  Upload
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -32,6 +33,7 @@ interface ExtractedInvoice {
 export default function ExtractedInvoicesDisplay() {
   const [invoices, setInvoices] = useState<ExtractedInvoice[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<ExtractedInvoice | null>(null);
   const { toast } = useToast();
 
@@ -80,6 +82,59 @@ export default function ExtractedInvoicesDisplay() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const exportToUploads = async () => {
+    if (invoices.length === 0) {
+      toast({
+        title: "No Invoices to Export",
+        description: "There are no extracted invoices to transfer",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to transfer ${invoices.length} invoice(s) from email_attachments to uploads folder?`)) {
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const response = await fetch('http://192.168.1.70:3002/api/move-email-attachments', {
+        method: 'POST'
+      });
+      
+      const data = await response.json();
+      if (data.success) {
+        toast({
+          title: "Export Successful",
+          description: `${data.movedCount || invoices.length} invoice(s) transferred to uploads folder`,
+        });
+        
+        // Clear the extracted invoices display
+        setInvoices([]);
+        setSelectedInvoice(null);
+        
+        // Redirect to main page after a short delay
+        setTimeout(() => {
+          window.location.href = 'http://192.168.1.70:3000/';
+        }, 1500);
+      } else {
+        toast({
+          title: "Export Failed",
+          description: data.message || "Failed to transfer invoices",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: "Failed to transfer invoices to uploads folder",
+        variant: "destructive"
+      });
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -179,6 +234,16 @@ export default function ExtractedInvoicesDisplay() {
           >
             <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+          <Button
+            onClick={exportToUploads}
+            disabled={isLoading || isExporting || invoices.length === 0}
+            variant="default"
+            size="sm"
+            className="flex items-center gap-2"
+          >
+            <Upload className={`h-4 w-4 ${isExporting ? 'animate-spin' : ''}`} />
+            {isExporting ? 'Exporting...' : 'Export to Uploads'}
           </Button>
           <Button
             onClick={clearAllInvoices}
