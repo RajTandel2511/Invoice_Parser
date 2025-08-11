@@ -41,6 +41,9 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
   const [isSplitMode, setIsSplitMode] = useState(false);
   const [splitPages, setSplitPages] = useState<PageInfo[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [isManualSplitMode, setIsManualSplitMode] = useState(false);
+  const [manualSplitPoints, setManualSplitPoints] = useState<number[]>([]);
+  const [isManualSplitting, setIsManualSplitting] = useState(false);
 
   // Filter only PDF files - memoized to prevent infinite re-renders
   const pdfFiles = useMemo(() => 
@@ -167,6 +170,89 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
     }
   };
 
+  const handleManualSplitToggle = () => {
+    if (isManualSplitMode) {
+      // Exit manual split mode
+      setIsManualSplitMode(false);
+      setManualSplitPoints([]);
+    } else {
+      // Enter manual split mode
+      setIsManualSplitMode(true);
+      setManualSplitPoints([]);
+    }
+  };
+
+  const handleManualSplitPoint = (pageNumber: number) => {
+    setManualSplitPoints(prev => {
+      if (prev.includes(pageNumber)) {
+        // Remove split point if already exists
+        return prev.filter(p => p !== pageNumber);
+      } else {
+        // Add split point
+        return [...prev, pageNumber].sort((a, b) => a - b);
+      }
+    });
+  };
+
+  const executeManualSplit = async () => {
+    if (manualSplitPoints.length === 0 || isManualSplitting) return;
+    
+    setIsManualSplitting(true);
+    try {
+      // Create groups based on split points
+      const groups: { start: number; end: number; pages: number[] }[] = [];
+      let currentStart = 1;
+      
+      for (const splitPoint of manualSplitPoints) {
+        const groupPages = [];
+        for (let i = currentStart; i <= splitPoint; i++) {
+          groupPages.push(i);
+        }
+        groups.push({
+          start: currentStart,
+          end: splitPoint,
+          pages: groupPages
+        });
+        currentStart = splitPoint + 1;
+      }
+      
+      // Add the last group (from last split point to end)
+      if (currentStart <= pagePreviews.length) {
+        const lastGroupPages = [];
+        for (let i = currentStart; i <= pagePreviews.length; i++) {
+          lastGroupPages.push(i);
+        }
+        groups.push({
+          start: currentStart,
+          end: pagePreviews.length,
+          pages: lastGroupPages
+        });
+      }
+      
+      console.log('Manual split groups:', groups);
+      
+      // Call API to create manual split PDFs
+      const result = await api.createManualSplitPDFs(groups);
+      
+      if (result.success) {
+        console.log('Manual split created successfully:', result.splitFiles);
+        alert(`Successfully created ${groups.length} custom PDF groups!`);
+        
+        // Exit manual split mode
+        setIsManualSplitMode(false);
+        setManualSplitPoints([]);
+      } else {
+        console.error('Failed to create manual split:', result.message);
+        alert(`Failed to create manual split: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error in manual split:', error);
+      alert('An error occurred while creating manual split');
+    } finally {
+      setIsManualSplitting(false);
+    }
+  };
+
   const handleExportSplitPDFs = async () => {
     if (isExporting || splitPages.length === 0) return;
     
@@ -199,17 +285,32 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${isSplitMode ? 'bg-green-100 dark:bg-green-900/20' : 'bg-blue-100 dark:bg-blue-900/20'}`}>
-              {isSplitMode ? (
+            <div className={`p-2 rounded-lg ${
+              isManualSplitMode 
+                ? 'bg-purple-100 dark:bg-purple-900/20' 
+                : isSplitMode 
+                  ? 'bg-green-100 dark:bg-green-900/20' 
+                  : 'bg-blue-100 dark:bg-blue-900/20'
+            }`}>
+              {isManualSplitMode ? (
+                <span className="text-2xl">✂️</span>
+              ) : isSplitMode ? (
                 <FileText className="h-6 w-6 text-green-600" />
               ) : (
                 <Eye className="h-6 w-6 text-blue-600" />
               )}
             </div>
             <div>
-              <CardTitle className="text-xl">{isSplitMode ? 'Split Pages View' : 'Page Preview'}</CardTitle>
+              <CardTitle className="text-xl">
+                {isManualSplitMode ? 'Manual Split Mode' : isSplitMode ? 'Split Pages View' : 'Page Preview'}
+              </CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                {isSplitMode ? `Viewing ${splitPages.length} individual page files` : 'Preview all pages from uploaded PDF files'}
+                {isManualSplitMode 
+                  ? `Click between pages to mark split points. Current splits: ${manualSplitPoints.length}` 
+                  : isSplitMode 
+                    ? `Viewing ${splitPages.length} individual page files` 
+                    : 'Preview all pages from uploaded PDF files'
+                }
               </p>
             </div>
           </div>
@@ -227,6 +328,38 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Page Break All</span>
               <Switch checked={isSplitMode} disabled={isSplitting} onCheckedChange={handleSplitToggle} />
+              
+              {/* Manual Split button */}
+              <Button
+                variant={isManualSplitMode ? "default" : "outline"}
+                size="sm"
+                onClick={handleManualSplitToggle}
+                disabled={isSplitting || isManualSplitting}
+                className={`h-8 px-3 text-xs transition-all duration-200 ${
+                  isManualSplitMode 
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-600 shadow-md' 
+                    : 'bg-purple-50 hover:bg-purple-100 dark:bg-purple-900/20 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-700'
+                }`}
+              >
+                ✂️ Manual Split
+              </Button>
+              
+              {/* Execute Manual Split button - only visible in manual split mode */}
+              {isManualSplitMode && manualSplitPoints.length > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={executeManualSplit}
+                  disabled={isManualSplitting}
+                  className="h-8 px-3 text-xs bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {isManualSplitting ? (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                  ) : (
+                    <span>✂️ Split Now</span>
+                  )}
+                </Button>
+              )}
               
               {/* Export button - only visible in split mode */}
               {isSplitMode && splitPages.length > 0 && (
@@ -255,15 +388,15 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isLoading || isSplitting ? (
+        {isLoading || isSplitting || isManualSplitting ? (
           <div className="p-8 text-center">
             <div className="flex flex-col items-center gap-4">
-              <div className={`p-4 rounded-full ${isSplitting ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-muted/50'}`}>
-                <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isSplitting ? 'border-orange-600' : 'border-primary'}`}></div>
+              <div className={`p-4 rounded-full ${isSplitting || isManualSplitting ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-muted/50'}`}>
+                <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isSplitting || isManualSplitting ? 'border-orange-600' : 'border-primary'}`}></div>
               </div>
               <div>
-                <p className="text-lg font-medium text-foreground mb-2">{isSplitting ? 'Splitting PDF Pages...' : 'Generating previews...'}</p>
-                <p className="text-muted-foreground">{isSplitting ? 'Creating individual files for each page' : 'Processing PDF pages and creating real thumbnails'}</p>
+                <p className="text-lg font-medium text-foreground mb-2">{isSplitting || isManualSplitting ? 'Splitting PDF Pages...' : 'Generating previews...'}</p>
+                <p className="text-muted-foreground">{isSplitting || isManualSplitting ? 'Creating individual files for each page' : 'Processing PDF pages and creating real thumbnails'}</p>
               </div>
             </div>
           </div>
@@ -272,13 +405,17 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
             {isSplitMode && (
               <div className="mb-2 text-xs text-muted-foreground">Split view shows a divider line between every consecutive page.</div>
             )}
-            <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4`}>
+            <div className={`grid ${
+                isSplitMode 
+                ? 'gap-2 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]' 
+                : 'gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
+            } ${isManualSplitMode ? 'cursor-crosshair' : ''}`}>
               {(isSplitMode ? splitPages : pagePreviews).map((page, index, arr) => (
-                <React.Fragment key={`${page.filename}-${page.pageNumber}`}>
+                <div key={`${page.filename}-${page.pageNumber}`} className="relative">
                   <div
                     className="relative group cursor-pointer"
                   >
-                    <div className="aspect-[3/4] bg-muted/30 rounded-lg border border-border/50 overflow-hidden hover:border-primary/50 transition-all duration-200 hover:shadow-md">
+                    <div className="aspect-[4/5] bg-muted/30 rounded-lg border border-border/50 overflow-hidden hover:border-primary/50 transition-all duration-200 hover:shadow-md">
                       {page.thumbnail ? (
                         <div className="h-full w-full relative">
                           <img 
@@ -287,7 +424,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                             className="w-full h-full object-cover"
                             onError={(e) => { e.currentTarget.style.display = 'none'; }}
                           />
-                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-2 text-xs">
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-1 text-xs">
                             <div className="truncate">
                               {page.filename.length > 20 ? `${page.filename.substring(0, 20)}...` : page.filename}
                             </div>
@@ -295,33 +432,61 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                           </div>
                         </div>
                       ) : (
-                        <div className="h-full flex flex-col items-center justify-center p-4 text-center">
-                          <div className="p-3 bg-muted/50 rounded-full mb-3">
-                            <FileText className="h-6 w-6 text-muted-foreground" />
+                        <div className="h-full flex flex-col items-center justify-center p-2 text-center">
+                          <div className="p-2 bg-muted/50 rounded-full mb-2">
+                            <FileText className="h-4 w-4 text-muted-foreground" />
                           </div>
                           <div className="text-xs font-medium text-foreground mb-1">
                             {page.filename.length > 20 ? `${page.filename.substring(0, 20)}...` : page.filename}
                           </div>
                           <div className="text-xs text-muted-foreground">Page {page.pageNumber}</div>
-                          <div className="text-xs text-muted-foreground mt-2">Loading thumbnail...</div>
+                          <div className="text-xs text-muted-foreground mt-1">Loading thumbnail...</div>
                         </div>
                       )}
                       <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                        <div className="p-2 bg-background/90 rounded-lg">
-                          <Eye className="h-4 w-4 text-primary" />
+                        <div className="p-1 bg-background/90 rounded-lg">
+                          <Eye className="h-3 w-3 text-primary" />
                         </div>
                       </div>
                     </div>
-                    <div className="absolute -top-2 -right-2">
-                      <Badge variant="secondary" className="text-xs px-2 py-1">{page.pageNumber}</Badge>
+                    <div className="absolute -top-1 -right-1">
+                      <Badge variant="secondary" className="text-xs px-1 py-0.5">{page.pageNumber}</Badge>
                     </div>
                     
                     {/* Vertical dashed separator for split mode */}
                     {isSplitMode && index < arr.length - 1 && (
-                      <div className="absolute -right-2 top-0 bottom-0 w-0.5 bg-gradient-to-b from-transparent via-green-500/60 to-transparent border-r border-dashed border-green-500/60" />
+                      <div className="absolute -right-1 top-0 bottom-0 w-0.5 bg-gradient-to-b from-transparent via-green-500/60 to-transparent border-r border-dashed border-green-500/60" />
                     )}
                   </div>
-                </React.Fragment>
+                  
+                  {/* Clickable split zone - positioned on the right edge of the page */}
+                  {isManualSplitMode && index < arr.length - 1 && (
+                    <div
+                      className="absolute -right-5 top-0 bottom-0 w-3 cursor-crosshair hover:bg-purple-100/50 dark:hover:bg-purple-900/20 transition-colors duration-200 group z-10"
+                      onClick={() => handleManualSplitPoint(page.pageNumber)}
+                    >
+                      {/* Vertical split line when active */}
+                      {manualSplitPoints.includes(page.pageNumber) && (
+                        <div className="absolute left-1/2 top-0 bottom-0 w-0.5 bg-purple-500 shadow-lg transform -translate-x-1/2">
+                          <div className="absolute -top-1 left-1/2 transform -translate-x-1/2">
+                            <span className="text-xs bg-purple-500 text-white px-1 py-0.5 rounded-full shadow-md whitespace-nowrap">
+                              ✂️
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Hover indicator */}
+                      {!manualSplitPoints.includes(page.pageNumber) && (
+                        <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                          <div className="w-4 h-4 bg-purple-500/20 rounded-full flex items-center justify-center">
+                            <span className="text-purple-600 text-xs">✂️</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </>

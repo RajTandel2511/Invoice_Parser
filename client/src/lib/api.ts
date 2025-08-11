@@ -449,6 +449,33 @@ export const api = {
     }
   },
 
+  // Create manual split PDFs with custom page groups
+  async createManualSplitPDFs(groups: { start: number; end: number; pages: number[] }[]): Promise<{ success: boolean; message?: string; splitFiles?: string[] }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/create-manual-split-pdfs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ groups }),
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to create manual split PDFs');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Create manual split PDFs error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to create manual split PDFs'
+      };
+    }
+  },
+
   // Export split PDFs to uploads folder
   async exportSplitPDFs(): Promise<{ success: boolean; message?: string; exportedFiles?: string[] }> {
     try {

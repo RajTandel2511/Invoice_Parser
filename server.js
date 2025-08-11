@@ -1512,6 +1512,110 @@ app.post('/api/split-pdf-pages', async (req, res) => {
   }
 });
 
+// Create manual split PDFs with custom page groups
+app.post('/api/create-manual-split-pdfs', async (req, res) => {
+  try {
+    const { groups } = req.body;
+    console.log('Creating manual split PDFs with groups:', groups);
+    
+    if (!groups || !Array.isArray(groups) || groups.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid groups data provided'
+      });
+    }
+    
+    const files = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'))
+      .filter(file => {
+        const filePath = path.join(uploadsDir, file);
+        const stats = fs.statSync(filePath);
+        return stats.isFile() && file.toLowerCase().endsWith('.pdf');
+      });
+    
+    if (files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No PDF files found to split'
+      });
+    }
+    
+    const splitFiles = [];
+    
+    for (const filename of files) {
+      try {
+        const filePath = path.join(uploadsDir, filename);
+        const fileBuffer = fs.readFileSync(filePath);
+        const pdfDoc = await PDFDocument.load(fileBuffer);
+        const totalPages = pdfDoc.getPageCount();
+        
+        console.log(`Processing PDF ${filename} with ${totalPages} pages for manual split`);
+        
+        // Create a directory for manual split pages if it doesn't exist
+        const splitDir = path.join(__dirname, 'split_pages');
+        if (!fs.existsSync(splitDir)) {
+          fs.mkdirSync(splitDir, { recursive: true });
+        }
+        
+        // Create PDFs for each group
+        for (let i = 0; i < groups.length; i++) {
+          const group = groups[i];
+          const newPdfDoc = await PDFDocument.create();
+          
+          // Add pages for this group (adjust for 0-based indexing)
+          for (let pageNum = group.start - 1; pageNum < group.end; pageNum++) {
+            if (pageNum < totalPages) {
+              const [page] = await newPdfDoc.copyPages(pdfDoc, [pageNum]);
+              newPdfDoc.addPage(page);
+            }
+          }
+          
+          // Generate filename for the group
+          const nameWithoutExt = path.basename(filename, '.pdf');
+          const groupFilename = `${nameWithoutExt}_group_${i + 1}_pages_${group.start}-${group.end}.pdf`;
+          const groupFilePath = path.join(splitDir, groupFilename);
+          
+          // Save the group PDF
+          const pdfBytes = await newPdfDoc.save();
+          fs.writeFileSync(groupFilePath, pdfBytes);
+          
+          splitFiles.push(groupFilename);
+          console.log(`Created manual split group: ${groupFilename}`);
+        }
+        
+        console.log(`Successfully created ${groups.length} manual split groups for ${filename}`);
+        
+      } catch (error) {
+        console.error(`Error creating manual split for ${filename}:`, error);
+        continue;
+      }
+    }
+    
+    if (splitFiles.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create any manual split PDFs'
+      });
+    }
+    
+    console.log(`Successfully created ${splitFiles.length} manual split PDFs`);
+    
+    res.json({
+      success: true,
+      message: `Successfully created ${splitFiles.length} manual split PDFs`,
+      splitFiles: splitFiles
+    });
+    
+  } catch (error) {
+    console.error('Error creating manual split PDFs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create manual split PDFs',
+      error: error.message
+    });
+  }
+});
+
 // Export split PDFs to uploads folder
 app.post('/api/export-split-pdfs', async (req, res) => {
   try {
