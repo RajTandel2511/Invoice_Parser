@@ -1334,6 +1334,41 @@ app.get('/api/pdf-file/:filename', (req, res) => {
   }
 });
 
+// Get split PDF file for thumbnail generation
+app.get('/api/split-pdf-file/:filename', (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, 'split_pages', filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Split PDF file not found'
+      });
+    }
+
+    if (!filename.toLowerCase().endsWith('.pdf')) {
+      return res.status(400).json({
+        success: false,
+        message: 'File is not a PDF'
+      });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+  } catch (error) {
+    console.error('Error serving split PDF file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to serve split PDF file',
+      error: error.message
+    });
+  }
+});
+
 // Get PDF page information
 app.get('/api/pdf-pages', async (req, res) => {
   try {
@@ -1382,6 +1417,174 @@ app.get('/api/pdf-pages', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to get PDF page information',
+      error: error.message
+    });
+  }
+});
+
+// Split PDF pages into individual files
+app.post('/api/split-pdf-pages', async (req, res) => {
+  try {
+    console.log('Splitting PDF pages into individual files...');
+    
+    const files = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'))
+      .filter(file => {
+        const filePath = path.join(uploadsDir, file);
+        const stats = fs.statSync(filePath);
+        return stats.isFile() && file.toLowerCase().endsWith('.pdf');
+      });
+    
+    if (files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No PDF files found to split'
+      });
+    }
+    
+    const splitFiles = [];
+    
+    for (const filename of files) {
+      try {
+        const filePath = path.join(uploadsDir, filename);
+        const fileBuffer = fs.readFileSync(filePath);
+        const pdfDoc = await PDFDocument.load(fileBuffer);
+        const pageCount = pdfDoc.getPageCount();
+        
+        console.log(`Processing PDF ${filename} with ${pageCount} pages`);
+        
+        // Create a directory for split pages if it doesn't exist
+        const splitDir = path.join(__dirname, 'split_pages');
+        if (!fs.existsSync(splitDir)) {
+          fs.mkdirSync(splitDir, { recursive: true });
+        }
+        
+        // Split each page into individual PDF files
+        for (let i = 0; i < pageCount; i++) {
+          const newPdfDoc = await PDFDocument.create();
+          const [page] = await newPdfDoc.copyPages(pdfDoc, [i]);
+          newPdfDoc.addPage(page);
+          
+          // Generate filename for the split page
+          const nameWithoutExt = path.basename(filename, '.pdf');
+          const splitFilename = `${nameWithoutExt}_page_${i + 1}.pdf`;
+          const splitFilePath = path.join(splitDir, splitFilename);
+          
+          // Save the split page
+          const pdfBytes = await newPdfDoc.save();
+          fs.writeFileSync(splitFilePath, pdfBytes);
+          
+          splitFiles.push(splitFilename);
+          console.log(`Created split page: ${splitFilename}`);
+        }
+        
+        console.log(`Successfully split ${filename} into ${pageCount} individual pages`);
+        
+      } catch (error) {
+        console.error(`Error splitting PDF ${filename}:`, error);
+        // Continue with other files even if one fails
+        continue;
+      }
+    }
+    
+    if (splitFiles.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to split any PDF pages'
+      });
+    }
+    
+    console.log(`Successfully split ${splitFiles.length} pages from ${files.length} PDF files`);
+    
+    res.json({
+      success: true,
+      message: `Successfully split ${splitFiles.length} pages from ${files.length} PDF file(s)`,
+      splitFiles: splitFiles
+    });
+    
+  } catch (error) {
+    console.error('Error splitting PDF pages:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to split PDF pages',
+      error: error.message
+    });
+  }
+});
+
+// Export split PDFs to uploads folder
+app.post('/api/export-split-pdfs', async (req, res) => {
+  try {
+    console.log('Exporting split PDFs to uploads folder...');
+    
+    const splitDir = path.join(__dirname, 'split_pages');
+    if (!fs.existsSync(splitDir)) {
+      return res.status(400).json({
+        success: false,
+        message: 'No split pages found. Please split PDFs first.'
+      });
+    }
+    
+    const splitFiles = fs.readdirSync(splitDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'))
+      .filter(file => file.toLowerCase().endsWith('.pdf'));
+    
+    if (splitFiles.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No split PDF files found to export'
+      });
+    }
+    
+    // Clear uploads folder (except .gitkeep)
+    const uploadFiles = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'));
+    
+    for (const file of uploadFiles) {
+      const filePath = path.join(uploadsDir, file);
+      if (fs.statSync(filePath).isFile()) {
+        fs.unlinkSync(filePath);
+        console.log(`Removed file: ${file}`);
+      }
+    }
+    
+    // Move split files to uploads folder (instead of copying)
+    const exportedFiles = [];
+    for (const filename of splitFiles) {
+      try {
+        const sourcePath = path.join(splitDir, filename);
+        const destPath = path.join(uploadsDir, filename);
+        
+        // Move the file (rename) instead of copying
+        fs.renameSync(sourcePath, destPath);
+        exportedFiles.push(filename);
+        console.log(`Moved: ${filename}`);
+      } catch (error) {
+        console.error(`Error moving ${filename}:`, error);
+        continue;
+      }
+    }
+    
+    if (exportedFiles.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to export any split PDFs'
+      });
+    }
+    
+    console.log(`Successfully moved ${exportedFiles.length} split PDFs to uploads folder`);
+    
+    res.json({
+      success: true,
+      message: `Successfully moved ${exportedFiles.length} split PDFs to uploads folder`,
+      exportedFiles: exportedFiles
+    });
+    
+  } catch (error) {
+    console.error('Error exporting split PDFs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export split PDFs',
       error: error.message
     });
   }

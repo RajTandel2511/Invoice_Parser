@@ -423,5 +423,81 @@ export const api = {
         message: error instanceof Error ? error.message : 'Failed to get PDF file'
       };
     }
+  },
+
+  // Get split PDF file (from split_pages directory)
+  async getSplitPDFFile(filename: string): Promise<{ success: boolean; blob?: Blob; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/split-pdf-file/${encodeURIComponent(filename)}`);
+      
+      if (!response.ok) {
+        const result = await response.json();
+        throw new Error(result.message || 'Failed to get split PDF file');
+      }
+
+      const blob = await response.blob();
+      return {
+        success: true,
+        blob
+      };
+    } catch (error) {
+      console.error('Get split PDF file error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get split PDF file'
+      };
+    }
+  },
+
+  // Export split PDFs to uploads folder
+  async exportSplitPDFs(): Promise<{ success: boolean; message?: string; exportedFiles?: string[] }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/export-split-pdfs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to export split PDFs');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Export split PDFs error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to export split PDFs'
+      };
+    }
+  },
+
+  // Split PDF pages into individual files
+  async splitPDFPages(): Promise<{ success: boolean; message?: string; splitFiles?: string[] }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/split-pdf-pages`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to split PDF pages');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Split PDF pages error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to split PDF pages'
+      };
+    }
   }
 }; 

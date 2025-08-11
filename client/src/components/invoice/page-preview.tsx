@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Eye, FileText, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import * as pdfjsLib from 'pdfjs-dist';
+import { Switch } from '@/components/ui/switch';
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
@@ -36,6 +37,10 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
   const [isLoading, setIsLoading] = useState(false);
   const [pdfFilesInfo, setPdfFilesInfo] = useState<PDFFileInfo[]>([]);
   const [thumbnailErrors, setThumbnailErrors] = useState<string[]>([]);
+  const [isSplitting, setIsSplitting] = useState(false);
+  const [isSplitMode, setIsSplitMode] = useState(false);
+  const [splitPages, setSplitPages] = useState<PageInfo[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
 
   // Filter only PDF files - memoized to prevent infinite re-renders
   const pdfFiles = useMemo(() => 
@@ -47,201 +52,141 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
   useEffect(() => {
     let isMounted = true;
     
-    console.log('PagePreview useEffect triggered:', { pdfFilesLength: pdfFiles.length, isLoading });
-    
     if (pdfFiles.length > 0 && !isLoading) {
-      console.log('Calling generatePagePreviews');
       generatePagePreviews(isMounted);
     }
     
     return () => {
-      console.log('PagePreview useEffect cleanup');
       isMounted = false;
     };
-  }, [pdfFiles.length]); // Only depend on the length, not the array itself
+  }, [pdfFiles.length]);
 
   const generatePDFThumbnail = async (pdfBlob: Blob, pageNumber: number): Promise<string> => {
     try {
-      console.log('Generating PDF thumbnail for page', pageNumber);
-      
-      // Create object URL from blob
       const pdfUrl = URL.createObjectURL(pdfBlob);
-      
-      // Load PDF document
       const loadingTask = pdfjsLib.getDocument(pdfUrl);
       const pdf = await loadingTask.promise;
-      console.log('PDF loaded, total pages:', pdf.numPages);
-      
-      // Get the specific page
       const page = await pdf.getPage(pageNumber);
-      console.log('Page loaded:', pageNumber);
-      
-      // Create viewport for thumbnail (smaller scale)
       const viewport = page.getViewport({ scale: 0.5 });
-      
-      // Create canvas
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d');
-      
-      if (!context) {
-        throw new Error('Could not get canvas context');
-      }
-      
-      // Set canvas dimensions
+      if (!context) throw new Error('Could not get canvas context');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
-      
-      // Render page to canvas
-      const renderContext = {
-        canvasContext: context,
-        viewport: viewport
-      };
-      
-      console.log('Rendering page to canvas...');
+      const renderContext = { canvasContext: context, viewport } as any;
       await page.render(renderContext).promise;
-      console.log('Page rendered successfully');
-      
-      // Convert canvas to data URL
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      console.log('Thumbnail generated, size:', dataUrl.length);
-      
-      // Clean up
       URL.revokeObjectURL(pdfUrl);
-      
       return dataUrl;
-    } catch (error) {
-      console.error('Error generating PDF thumbnail for page', pageNumber, ':', error);
+    } catch {
       return '';
     }
   };
 
   const generatePagePreviews = async (isMounted: boolean = true) => {
-    console.log('generatePagePreviews called, isLoading:', isLoading);
     setIsLoading(true);
     setThumbnailErrors([]);
-    
-    // Add timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      if (isMounted) {
-        console.log('Timeout reached, setting loading to false');
-        setIsLoading(false);
-      }
-    }, 30000); // 30 second timeout for PDF processing
-    
     try {
-      console.log('Fetching PDF page information from backend...');
-      // Fetch actual PDF page information from backend
       const result = await api.getPDFPages();
-      console.log('Backend response:', result);
-      
-      clearTimeout(timeoutId); // Clear timeout if request completes
-      
-      if (!isMounted) {
-        console.log('Component unmounted, skipping state updates');
-        return; // Don't update state if component unmounted
-      }
-      
+      if (!isMounted) return;
       if (result.success && result.pdfFiles) {
-        console.log('Setting PDF files info:', result.pdfFiles);
         setPdfFilesInfo(result.pdfFiles);
-        
         const pages: PageInfo[] = [];
-        
-        // Create page entries based on actual page count
         for (const pdfFile of result.pdfFiles) {
           for (let i = 1; i <= pdfFile.pageCount; i++) {
-            pages.push({
-              pageNumber: i,
-              filename: pdfFile.filename,
-            });
+            pages.push({ pageNumber: i, filename: pdfFile.filename });
           }
         }
-        
-        console.log('Setting page previews:', pages);
         setPagePreviews(pages);
-        
-        // Generate real PDF thumbnails for each page
-        if (isMounted) {
-          console.log('Generating real PDF thumbnails...');
-          await generateRealThumbnails(pages, isMounted);
-        }
-        
-      } else {
-        console.error('Failed to get PDF page information:', result.message);
-        // Fallback to placeholder logic if backend fails
-        const pages: PageInfo[] = [];
-        pdfFiles.forEach(file => {
-          const estimatedPages = Math.max(1, Math.floor(file.size / 50000));
-          for (let i = 1; i <= estimatedPages; i++) {
-            pages.push({
-              pageNumber: i,
-              filename: file.filename,
-            });
-          }
-        });
-        setPagePreviews(pages);
+        await generateRealThumbnails(pages, isMounted);
       }
-    } catch (error) {
-      console.error('Error generating page previews:', error);
-      clearTimeout(timeoutId); // Clear timeout on error
-      // Fallback to placeholder logic
-      const pages: PageInfo[] = [];
-      pdfFiles.forEach(file => {
-        const estimatedPages = Math.max(1, Math.floor(file.size / 50000));
-        for (let i = 1; i <= estimatedPages; i++) {
-          pages.push({
-            pageNumber: i,
-            filename: file.filename,
-          });
-        }
-      });
-      setPagePreviews(pages);
     } finally {
-      if (isMounted) {
-        console.log('Setting isLoading to false');
-        setIsLoading(false);
-      }
+      if (isMounted) setIsLoading(false);
     }
   };
 
   const generateRealThumbnails = async (pages: PageInfo[], isMounted: boolean) => {
-    console.log('Generating real thumbnails for', pages.length, 'pages');
-    
     for (let i = 0; i < pages.length; i++) {
       if (!isMounted) break;
-      
       const page = pages[i];
-      console.log('Processing thumbnail for', page.filename, 'page', page.pageNumber);
-      
       try {
-        // Get PDF file using API
         const result = await api.getPDFFile(page.filename);
         if (result.success && result.blob) {
-          console.log('PDF file fetched successfully, size:', result.blob.size);
-          
           const thumbnail = await generatePDFThumbnail(result.blob, page.pageNumber);
-          
           if (isMounted && thumbnail) {
-            console.log('Thumbnail generated successfully for page', page.pageNumber);
-            setPagePreviews(prev => 
-              prev.map(p => 
-                p.filename === page.filename && p.pageNumber === page.pageNumber 
-                  ? { ...p, thumbnail } 
-                  : p
-              )
-            );
-          } else {
-            console.log('Failed to generate thumbnail for page', page.pageNumber);
-            setThumbnailErrors(prev => [...prev, `Failed to generate thumbnail for ${page.filename} page ${page.pageNumber}`]);
+            setPagePreviews(prev => prev.map(p => p.filename === page.filename && p.pageNumber === page.pageNumber ? { ...p, thumbnail } : p));
           }
-        } else {
-          console.error('Failed to fetch PDF file:', result.message);
-          setThumbnailErrors(prev => [...prev, `Failed to fetch PDF file: ${result.message}`]);
         }
       } catch (error) {
-        console.error('Error generating thumbnail for', page.filename, 'page', page.pageNumber, ':', error);
         setThumbnailErrors(prev => [...prev, `Error processing ${page.filename} page ${page.pageNumber}: ${error}`]);
       }
+    }
+  };
+
+  const generateSplitThumbnails = async (pages: PageInfo[], isMounted: boolean) => {
+    for (let i = 0; i < pages.length; i++) {
+      if (!isMounted) break;
+      const page = pages[i];
+      try {
+        const result = await api.getSplitPDFFile(page.filename);
+        if (result.success && result.blob) {
+          const thumbnail = await generatePDFThumbnail(result.blob, 1);
+          if (isMounted && thumbnail) {
+            setSplitPages(prev => prev.map(p => p.filename === page.filename ? { ...p, thumbnail } : p));
+          }
+        }
+      } catch (error) {
+        setThumbnailErrors(prev => [...prev, `Error processing split file ${page.filename}: ${error}`]);
+      }
+    }
+  };
+
+  const handleSplitToggle = async (checked: boolean) => {
+    if (checked) {
+      if (isSplitting) return;
+      setIsSplitting(true);
+      try {
+        const result = await api.splitPDFPages();
+        if (result.success) {
+          const splitPageInfos: PageInfo[] = [];
+          if (result.splitFiles) {
+            result.splitFiles.forEach((filename: string, index: number) => {
+              splitPageInfos.push({ pageNumber: index + 1, filename });
+            });
+          }
+          setSplitPages(splitPageInfos);
+          setIsSplitMode(true);
+          await generateSplitThumbnails(splitPageInfos, true);
+        }
+      } finally {
+        setIsSplitting(false);
+      }
+    } else {
+      setIsSplitMode(false);
+      setSplitPages([]);
+    }
+  };
+
+  const handleExportSplitPDFs = async () => {
+    if (isExporting || splitPages.length === 0) return;
+    
+    setIsExporting(true);
+    try {
+      console.log('Exporting split PDFs to uploads folder...');
+      const result = await api.exportSplitPDFs();
+      
+      if (result.success) {
+        console.log('Split PDFs exported successfully:', result.exportedFiles);
+        alert(`Successfully exported ${result.exportedFiles?.length || splitPages.length} split pages to uploads folder!`);
+      } else {
+        console.error('Failed to export split PDFs:', result.message);
+        alert(`Failed to export split PDFs: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error exporting split PDFs:', error);
+      alert('An error occurred while exporting split PDFs');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -254,27 +199,55 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/20 rounded-lg">
-              <Eye className="h-6 w-6 text-blue-600" />
+            <div className={`p-2 rounded-lg ${isSplitMode ? 'bg-green-100 dark:bg-green-900/20' : 'bg-blue-100 dark:bg-blue-900/20'}`}>
+              {isSplitMode ? (
+                <FileText className="h-6 w-6 text-green-600" />
+              ) : (
+                <Eye className="h-6 w-6 text-blue-600" />
+              )}
             </div>
             <div>
-              <CardTitle className="text-xl">Page Preview</CardTitle>
+              <CardTitle className="text-xl">{isSplitMode ? 'Split Pages View' : 'Page Preview'}</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
-                Preview all pages from uploaded PDF files
+                {isSplitMode ? `Viewing ${splitPages.length} individual page files` : 'Preview all pages from uploaded PDF files'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
-              {pagePreviews.length} Pages
-            </Badge>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
+                {isSplitMode ? splitPages.length : pagePreviews.length} Pages
+              </Badge>
+              {isSplitMode && (
+                <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-600">
+                  Split Mode
+                </Badge>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Page Break All</span>
+              <Switch checked={isSplitMode} disabled={isSplitting} onCheckedChange={handleSplitToggle} />
+              
+              {/* Export button - only visible in split mode */}
+              {isSplitMode && splitPages.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportSplitPDFs}
+                  disabled={isExporting}
+                  className="h-8 px-3 text-xs bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/30 text-green-700 dark:text-green-300 border-green-200 dark:border-green-700"
+                >
+                  {isExporting ? (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600 mr-2"></div>
+                  ) : (
+                    <FileText className="h-3 w-3 mr-1" />
+                  )}
+                  Export to Uploads
+                </Button>
+              )}
+            </div>
             {onClose && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="h-8 w-8 p-0"
-              >
+              <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0">
                 <X className="h-4 w-4" />
               </Button>
             )}
@@ -282,88 +255,78 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {isLoading ? (
+        {isLoading || isSplitting ? (
           <div className="p-8 text-center">
             <div className="flex flex-col items-center gap-4">
-              <div className="p-4 bg-muted/50 rounded-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <div className={`p-4 rounded-full ${isSplitting ? 'bg-orange-100 dark:bg-orange-900/30' : 'bg-muted/50'}`}>
+                <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${isSplitting ? 'border-orange-600' : 'border-primary'}`}></div>
               </div>
               <div>
-                <p className="text-lg font-medium text-foreground mb-2">Generating previews...</p>
-                <p className="text-muted-foreground">Processing PDF pages and creating real thumbnails</p>
+                <p className="text-lg font-medium text-foreground mb-2">{isSplitting ? 'Splitting PDF Pages...' : 'Generating previews...'}</p>
+                <p className="text-muted-foreground">{isSplitting ? 'Creating individual files for each page' : 'Processing PDF pages and creating real thumbnails'}</p>
               </div>
             </div>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-            {pagePreviews.map((page, index) => (
-              <div
-                key={`${page.filename}-${page.pageNumber}`}
-                className="relative group cursor-pointer"
-              >
-                <div className="aspect-[3/4] bg-muted/30 rounded-lg border border-border/50 overflow-hidden hover:border-primary/50 transition-all duration-200 hover:shadow-md">
-                  {page.thumbnail ? (
-                    <div className="h-full w-full relative">
-                      <img 
-                        src={page.thumbnail} 
-                        alt={`Page ${page.pageNumber} of ${page.filename}`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          console.error('Failed to load thumbnail for page', page.pageNumber);
-                          e.currentTarget.style.display = 'none';
-                        }}
-                      />
-                      {/* Overlay with filename */}
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-2 text-xs">
-                        <div className="truncate">
-                          {page.filename.length > 20 
-                            ? `${page.filename.substring(0, 20)}...` 
-                            : page.filename
-                          }
+          <>
+            {isSplitMode && (
+              <div className="mb-2 text-xs text-muted-foreground">Split view shows a divider line between every consecutive page.</div>
+            )}
+            <div className={`grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4`}>
+              {(isSplitMode ? splitPages : pagePreviews).map((page, index, arr) => (
+                <React.Fragment key={`${page.filename}-${page.pageNumber}`}>
+                  <div
+                    className="relative group cursor-pointer"
+                  >
+                    <div className="aspect-[3/4] bg-muted/30 rounded-lg border border-border/50 overflow-hidden hover:border-primary/50 transition-all duration-200 hover:shadow-md">
+                      {page.thumbnail ? (
+                        <div className="h-full w-full relative">
+                          <img 
+                            src={page.thumbnail} 
+                            alt={`Page ${page.pageNumber} of ${page.filename}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                          />
+                          <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white p-2 text-xs">
+                            <div className="truncate">
+                              {page.filename.length > 20 ? `${page.filename.substring(0, 20)}...` : page.filename}
+                            </div>
+                            <div>Page {page.pageNumber}</div>
+                          </div>
                         </div>
-                        <div>Page {page.pageNumber}</div>
+                      ) : (
+                        <div className="h-full flex flex-col items-center justify-center p-4 text-center">
+                          <div className="p-3 bg-muted/50 rounded-full mb-3">
+                            <FileText className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                          <div className="text-xs font-medium text-foreground mb-1">
+                            {page.filename.length > 20 ? `${page.filename.substring(0, 20)}...` : page.filename}
+                          </div>
+                          <div className="text-xs text-muted-foreground">Page {page.pageNumber}</div>
+                          <div className="text-xs text-muted-foreground mt-2">Loading thumbnail...</div>
+                        </div>
+                      )}
+                      <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+                        <div className="p-2 bg-background/90 rounded-lg">
+                          <Eye className="h-4 w-4 text-primary" />
+                        </div>
                       </div>
                     </div>
-                  ) : (
-                    <div className="h-full flex flex-col items-center justify-center p-4 text-center">
-                      <div className="p-3 bg-muted/50 rounded-full mb-3">
-                        <FileText className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                      <div className="text-xs font-medium text-foreground mb-1">
-                        {page.filename.length > 20 
-                          ? `${page.filename.substring(0, 20)}...` 
-                          : page.filename
-                        }
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Page {page.pageNumber}
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-2">
-                        Loading thumbnail...
-                      </div>
+                    <div className="absolute -top-2 -right-2">
+                      <Badge variant="secondary" className="text-xs px-2 py-1">{page.pageNumber}</Badge>
                     </div>
-                  )}
-                  
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-primary/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                    <div className="p-2 bg-background/90 rounded-lg">
-                      <Eye className="h-4 w-4 text-primary" />
-                    </div>
+                    
+                    {/* Vertical dashed separator for split mode */}
+                    {isSplitMode && index < arr.length - 1 && (
+                      <div className="absolute -right-2 top-0 bottom-0 w-0.5 bg-gradient-to-b from-transparent via-green-500/60 to-transparent border-r border-dashed border-green-500/60" />
+                    )}
                   </div>
-                </div>
-                
-                {/* Page number badge */}
-                <div className="absolute -top-2 -right-2">
-                  <Badge variant="secondary" className="text-xs px-2 py-1">
-                    {page.pageNumber}
-                  </Badge>
-                </div>
-              </div>
-            ))}
-          </div>
+                </React.Fragment>
+              ))}
+            </div>
+          </>
         )}
-        
-        {/* Debug section */}
+
         {thumbnailErrors.length > 0 && (
           <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
             <div className="text-sm text-red-700 dark:text-red-300">
@@ -376,7 +339,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
             </div>
           </div>
         )}
-        
+
         {pagePreviews.length > 0 && (
           <div className="mt-4 p-4 bg-muted/30 rounded-lg border border-border/50">
             <div className="flex items-center justify-between text-sm">
@@ -385,16 +348,6 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                 <span className="text-muted-foreground">
                   {pdfFiles.length} PDF file{pdfFiles.length > 1 ? 's' : ''} • {pagePreviews.length} total pages
                 </span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" className="text-xs">
-                  <Eye className="h-3 w-3 mr-1" />
-                  View All
-                </Button>
-                <Button variant="outline" size="sm" className="text-xs">
-                  <FileText className="h-3 w-3 mr-1" />
-                  Export
-                </Button>
               </div>
             </div>
           </div>
