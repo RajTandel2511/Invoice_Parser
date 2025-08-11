@@ -145,6 +145,34 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
     }
   };
 
+  const openBlobInNewTab = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if (win) {
+      // Prevent the new window from having access to the opener for security
+      win.opener = null;
+    }
+    // Revoke after some time to let the tab load fully
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const handlePreviewOriginalPDF = async () => {
+    try {
+      if (pdfFilesInfo.length === 0) return;
+      // For now, preview the first uploaded PDF (common case: a single combined PDF)
+      const targetFilename = pdfFilesInfo[0].filename;
+      const result = await api.getPDFFile(targetFilename);
+      if (result.success && result.blob) {
+        openBlobInNewTab(result.blob, targetFilename);
+      } else {
+        alert('Could not load the original PDF for preview.');
+      }
+    } catch (error) {
+      console.error('Preview original PDF error:', error);
+      alert('Failed to open preview.');
+    }
+  };
+
   const handleSplitToggle = async (checked: boolean) => {
     if (checked) {
       if (isSplitting) return;
@@ -455,6 +483,17 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
               <Badge variant="outline" className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300">
                 {isSplitMode ? splitPages.length : pagePreviews.length} Pages
               </Badge>
+              {/* Preview original PDF button */}
+              {!isSplitMode && pdfFilesInfo.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handlePreviewOriginalPDF}
+                  className="h-8 px-3 text-xs bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700"
+                >
+                  <Eye className="h-3 w-3 mr-1" /> Preview
+                </Button>
+              )}
               {isSplitMode && (
                 <Badge variant="secondary" className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border-green-300 dark:border-green-600">
                   Split Mode
