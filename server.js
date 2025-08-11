@@ -7,6 +7,12 @@ import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import XLSX from 'xlsx';
 import { PDFDocument } from 'pdf-lib';
+import Imap from 'imap';
+import { simpleParser } from 'mailparser';
+import dotenv from 'dotenv';
+
+// Load environment variables from .env file
+dotenv.config();
 
 const app = express();
 const PORT = 3002;
@@ -385,6 +391,23 @@ app.post('/api/process-invoices', async (req, res) => {
     console.log(`Executing Python script: ${pythonScriptPath}`);
     console.log(`Working directory: ${processDir}`);
 
+    // Clean up any old approval flags before starting new processing
+    const oldVendorFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'approval_needed.flag');
+    const oldPOFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'po_approval_needed.flag');
+    
+    try {
+      if (fs.existsSync(oldVendorFlagPath)) {
+        fs.unlinkSync(oldVendorFlagPath);
+        console.log('Cleared old vendor approval flag for new processing');
+      }
+      if (fs.existsSync(oldPOFlagPath)) {
+        fs.unlinkSync(oldPOFlagPath);
+        console.log('Cleared old PO approval flag for new processing');
+      }
+    } catch (error) {
+      console.error('Error clearing old approval flags:', error);
+    }
+
     const pythonProcess = spawn('python', ['notebooks/invoice_pipeline_combined.py'], {
       cwd: processDir,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -441,24 +464,14 @@ app.get('/api/check-approval-needed', async (req, res) => {
     
     const approvalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'approval_needed.flag');
     const csvPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'matched_vendors_from_txt.csv');
-    const lastContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_content_hash.txt');
-    const processingFlagPath = path.join(__dirname, 'process', 'data', 'processed', 'processing_complete.flag');
     
     const approvalNeeded = fs.existsSync(approvalFlagPath);
     const csvExists = fs.existsSync(csvPath);
-    const processingComplete = fs.existsSync(processingFlagPath);
     
     console.log('Approval flag exists:', approvalNeeded);
-    console.log('CSV file exists:', csvExists);
-    console.log('Processing complete flag exists:', processingComplete);
+    console.log('Vendor CSV file exists:', csvExists);
     
-    // Check if approval is needed - we need to be more flexible about timing
-    // The Python script might create processing_complete.flag but still need approval
-    console.log('Processing complete flag exists:', processingComplete);
-    console.log('Approval flag exists:', approvalNeeded);
-    
-    // If approval flag exists, we should show approval regardless of processing status
-    // The Python script creates approval_needed.flag when it needs user input
+    // Check if approval is needed - the Python script creates this flag when it needs user input
     if (approvalNeeded) {
       console.log('Approval flag exists - should show approval dialog');
     } else {
@@ -472,98 +485,53 @@ app.get('/api/check-approval-needed', async (req, res) => {
     
     // Also check if the CSV file has content (not just exists)
     let csvHasContent = false;
-    let csvModTime = null;
     let csvContent = '';
     if (csvExists) {
       try {
         const csvStats = fs.statSync(csvPath);
-        csvModTime = csvStats.mtime;
         csvContent = fs.readFileSync(csvPath, 'utf-8');
         csvHasContent = csvContent.trim().length > 0;
-        console.log('CSV file has content:', csvHasContent);
-        console.log('CSV file size:', csvContent.length, 'characters');
-        console.log('CSV file modification time:', csvModTime);
+        console.log('Vendor CSV file has content:', csvHasContent);
+        console.log('Vendor CSV file size:', csvContent.length, 'characters');
+        console.log('Vendor CSV file modification time:', csvStats.mtime);
+        
+        // Check if this is old data that shouldn't trigger approval
+        const currentTime = new Date();
+        const timeDiffMinutes = (currentTime - csvStats.mtime) / (1000 * 60);
+        
+        if (timeDiffMinutes > 5) {
+          console.log('Vendor CSV file is too old (more than 5 minutes)');
+          console.log('This is likely old data from a previous run - clearing old flag');
+          
+          // Clear the old flag file since this is stale data
+          try {
+            fs.unlinkSync(approvalFlagPath);
+            console.log('Cleared old approval flag for stale data');
+          } catch (error) {
+            console.error('Error clearing old approval flag:', error);
+          }
+          
+          return res.json({
+            success: true,
+            approvalNeeded: false,
+            matches: []
+          });
+        }
+        
       } catch (error) {
-        console.error('Error reading CSV file:', error);
+        console.error('Error reading vendor CSV file:', error);
       }
     }
     
     if (approvalNeeded && csvExists && csvHasContent) {
-      // Check if the CSV file was modified recently (within last 2 minutes)
-      const currentTime = new Date();
-      const timeDiffMinutes = (currentTime - csvModTime) / (1000 * 60);
-      const timeDiffSeconds = (currentTime - csvModTime) / 1000;
+      console.log('Vendor CSV file is recent, showing approval dialog');
       
-      console.log('CSV file modification time:', csvModTime);
-      console.log('Time difference (minutes):', timeDiffMinutes);
-      console.log('Time difference (seconds):', timeDiffSeconds);
-      
-      // Only consider it a new approval if the file was modified within the last 2 minutes
-      if (timeDiffMinutes > 2) {
-        console.log('CSV file is too old, not showing approval dialog');
-        return res.json({
-          success: true,
-          approvalNeeded: false,
-          matches: []
-        });
-      }
-      
-      // If the file was modified very recently (within last 30 seconds), it's very fresh
-      if (timeDiffSeconds <= 30) {
-        console.log('CSV file was modified within last 30 seconds - extremely fresh data!');
-      }
-      
-      // Create a hash of the CSV content to detect if it has actually changed
-      const crypto = await import('crypto');
-      const contentHash = crypto.createHash('md5').update(csvContent).digest('hex');
-      console.log('CSV content hash:', contentHash);
-      
-      // Check if we've seen this content before
-      let lastContentHash = '';
-      if (fs.existsSync(lastContentHashPath)) {
-        try {
-          lastContentHash = fs.readFileSync(lastContentHashPath, 'utf-8').trim();
-          console.log('Last content hash:', lastContentHash);
-        } catch (error) {
-          console.error('Error reading last content hash:', error);
-        }
-      }
-      
-      // Only show approval if content has changed AND file was modified recently
-      if (contentHash === lastContentHash) {
-        console.log('Content hash unchanged - not showing approval dialog');
-        return res.json({
-          success: true,
-          approvalNeeded: false,
-          matches: []
-        });
-      }
-      
-      // Save the new content hash for next time
-      try {
-        fs.writeFileSync(lastContentHashPath, contentHash);
-        console.log('Saved new content hash:', contentHash);
-      } catch (error) {
-        console.error('Error saving content hash:', error);
-      }
-      
-      // Read CSV file to get vendor matches (we already have the content)
-      
-      if (!csvContent.trim()) {
-        console.log('CSV file is empty');
-        return res.json({
-          success: true,
-          approvalNeeded: false,
-          matches: []
-        });
-      }
-
-      // Parse CSV using a simpler approach
+      // Parse CSV to get vendor matches
       const matches = [];
       const lines = csvContent.split('\n').filter(line => line.trim());
       
       if (lines.length <= 1) {
-        console.log('CSV file has no data rows');
+        console.log('Vendor CSV file has no data rows');
         return res.json({
           success: true,
           approvalNeeded: false,
@@ -591,7 +559,7 @@ app.get('/api/check-approval-needed', async (req, res) => {
       }
       headers.push(currentHeader.trim()); // Add last header
       
-      console.log('Parsed headers:', headers);
+      console.log('Parsed vendor headers:', headers);
       
       // Parse data rows
       for (let i = 1; i < lines.length; i++) {
@@ -628,11 +596,11 @@ app.get('/api/check-approval-needed', async (req, res) => {
           match[header] = value;
         });
         
-        console.log('Parsed match:', match);
+        console.log('Parsed vendor match:', match);
         matches.push(match);
       }
 
-      console.log('Found matches:', matches.length);
+      console.log('Found vendor matches:', matches.length);
       
       res.json({
         success: true,
@@ -648,10 +616,10 @@ app.get('/api/check-approval-needed', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error checking approval status:', error);
+    console.error('Error checking vendor approval status:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to check approval status'
+      message: 'Failed to check vendor approval status'
     });
   }
 });
@@ -808,6 +776,19 @@ app.post('/api/approve-vendors', async (req, res) => {
       }
     }
     
+    // CRITICAL: Remove the approval flag so Python script can continue
+    const approvalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'approval_needed.flag');
+    if (fs.existsSync(approvalFlagPath)) {
+      try {
+        fs.unlinkSync(approvalFlagPath);
+        console.log('Removed approval flag - Python script can now continue');
+      } catch (error) {
+        console.error('Error removing approval flag:', error);
+      }
+    } else {
+      console.log('No approval flag found to remove');
+    }
+    
     console.log('Approval status written successfully');
 
     res.json({
@@ -830,7 +811,6 @@ app.get('/api/check-po-approval-needed', async (req, res) => {
     
     const poApprovalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'po_approval_needed.flag');
     const csvPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'pixtral_po_results.csv');
-    const lastPOContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_po_content_hash.txt');
     
     const poApprovalNeeded = fs.existsSync(poApprovalFlagPath);
     const csvExists = fs.existsSync(csvPath);
@@ -851,35 +831,34 @@ app.get('/api/check-po-approval-needed', async (req, res) => {
     
     // Also check if the CSV file has content (not just exists)
     let csvHasContent = false;
-    let csvModTime = null;
     let csvContent = '';
     if (csvExists) {
       try {
         const csvStats = fs.statSync(csvPath);
-        csvModTime = csvStats.mtime;
         csvContent = fs.readFileSync(csvPath, 'utf-8');
         csvHasContent = csvContent.trim().length > 0;
         console.log('PO CSV file has content:', csvHasContent);
         console.log('PO CSV file size:', csvContent.length, 'characters');
-        console.log('PO CSV file modification time:', csvModTime);
+        console.log('PO CSV file modification time:', csvStats.mtime);
       } catch (error) {
         console.error('Error reading PO CSV file:', error);
       }
     }
     
     if (poApprovalNeeded && csvExists && csvHasContent) {
-      // Check if the CSV file was modified recently (within last 2 minutes)
+      // Check if the CSV file was modified recently (within last 5 minutes)
+      // This ensures we only show approval for newly created data, not old data
       const currentTime = new Date();
+      const csvModTime = fs.statSync(csvPath).mtime;
       const timeDiffMinutes = (currentTime - csvModTime) / (1000 * 60);
-      const timeDiffSeconds = (currentTime - csvModTime) / 1000;
       
       console.log('PO CSV file modification time:', csvModTime);
       console.log('Time difference (minutes):', timeDiffMinutes);
-      console.log('Time difference (seconds):', timeDiffSeconds);
       
-      // Only consider it a new approval if the file was modified within the last 2 minutes
-      if (timeDiffMinutes > 2) {
-        console.log('PO CSV file is too old, not showing approval dialog');
+      // Only consider it a new approval if the file was modified within the last 5 minutes
+      if (timeDiffMinutes > 5) {
+        console.log('PO CSV file is too old (more than 5 minutes), not showing approval dialog');
+        console.log('This is likely old data from a previous run');
         return res.json({
           success: true,
           approvalNeeded: false,
@@ -887,57 +866,9 @@ app.get('/api/check-po-approval-needed', async (req, res) => {
         });
       }
       
-      // If the file was modified very recently (within last 30 seconds), it's very fresh
-      if (timeDiffSeconds <= 30) {
-        console.log('PO CSV file was modified within last 30 seconds - extremely fresh data!');
-      }
+      console.log('PO CSV file is recent (within 5 minutes), showing approval dialog');
       
-      // Create a hash of the CSV content to detect if it has actually changed
-      const crypto = await import('crypto');
-      const contentHash = crypto.createHash('md5').update(csvContent).digest('hex');
-      console.log('PO CSV content hash:', contentHash);
-      
-      // Check if we've seen this content before
-      let lastContentHash = '';
-      if (fs.existsSync(lastPOContentHashPath)) {
-        try {
-          lastContentHash = fs.readFileSync(lastPOContentHashPath, 'utf-8').trim();
-          console.log('Last PO content hash:', lastContentHash);
-        } catch (error) {
-          console.error('Error reading last PO content hash:', error);
-        }
-      }
-      
-      // Only show approval if content has changed AND file was modified recently
-      if (contentHash === lastContentHash) {
-        console.log('PO content hash unchanged - not showing approval dialog');
-        return res.json({
-          success: true,
-          approvalNeeded: false,
-          matches: []
-        });
-      }
-      
-      // Save the new content hash for next time
-      try {
-        fs.writeFileSync(lastPOContentHashPath, contentHash);
-        console.log('Saved new PO content hash:', contentHash);
-      } catch (error) {
-        console.error('Error saving PO content hash:', error);
-      }
-      
-      // Read CSV file to get PO matches (we already have the content)
-      
-      if (!csvContent.trim()) {
-        console.log('PO CSV file is empty');
-        return res.json({
-          success: true,
-          approvalNeeded: false,
-          matches: []
-        });
-      }
-
-      // Parse CSV using a simpler approach
+      // Parse CSV to get PO matches
       const matches = [];
       const lines = csvContent.split('\n').filter(line => line.trim());
       
@@ -1002,13 +933,16 @@ app.get('/api/check-po-approval-needed', async (req, res) => {
           if (value.startsWith('"') && value.endsWith('"')) {
             value = value.slice(1, -1);
           }
+          // Replace newlines with spaces for display
+          value = value.replace(/\n/g, ' ').replace(/\r/g, '');
           match[header] = value;
         });
         
+        console.log('Parsed PO match:', match);
         matches.push(match);
       }
-      
-      console.log('Parsed PO matches:', matches);
+
+      console.log('Found PO matches:', matches.length);
       
       res.json({
         success: true,
@@ -1023,7 +957,7 @@ app.get('/api/check-po-approval-needed', async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('Error checking PO approval needed:', error);
+    console.error('Error checking PO approval status:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to check PO approval status'
@@ -1844,7 +1778,8 @@ app.post('/api/clear-all-folders', (req, res) => {
   try {
     const foldersToClear = [
       uploadsDir,
-      path.join(__dirname, 'split_pages')
+      path.join(__dirname, 'split_pages'),
+      path.join(__dirname, 'manual_split_pages')
     ];
     
     const clearedFolders = [];
@@ -1917,6 +1852,744 @@ app.get('/api/check-uploads-folder', (req, res) => {
   }
 });
 
+// Store extracted invoices in memory for display
+let extractedInvoices = [];
+
+// Email monitoring service
+class EmailMonitor {
+  constructor() {
+    // Load environment variables
+    this.emailConfig = {
+      user: process.env.EMAIL_USER || 'fetcherinvoice@gmail.com',
+      password: process.env.EMAIL_PASSWORD || 'your-app-password',
+      host: process.env.EMAIL_HOST || 'imap.gmail.com',
+      port: process.env.EMAIL_PORT || 993,
+      tls: true,
+      tlsOptions: { rejectUnauthorized: false }
+    };
+    
+    console.log('Email config loaded:', {
+      user: this.emailConfig.user,
+      host: this.emailConfig.host,
+      port: this.emailConfig.port,
+      hasPassword: !!this.emailConfig.password
+    });
+    
+    this.imap = new Imap(this.emailConfig);
+    this.isMonitoring = false;
+    this.checkInterval = null;
+  }
+
+  start() {
+    if (this.isMonitoring) return;
+    
+    console.log('Starting email monitoring...');
+    this.isMonitoring = true;
+    
+    // Check emails every 5 minutes
+    this.checkInterval = setInterval(() => {
+      this.checkForNewEmails();
+    }, 5 * 60 * 1000);
+    
+    // Initial check
+    this.checkForNewEmails();
+  }
+
+  stop() {
+    if (!this.isMonitoring) return;
+    
+    console.log('Stopping email monitoring...');
+    this.isMonitoring = false;
+    
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+      this.checkInterval = null;
+    }
+  }
+
+  async checkForNewEmails() {
+    try {
+      await this.connectAndProcess();
+    } catch (error) {
+      console.error('Email monitoring error:', error);
+    }
+  }
+
+  async connectAndProcess() {
+    return new Promise((resolve, reject) => {
+      console.log('Attempting to connect to IMAP server...');
+      console.log('Using config:', {
+        user: this.emailConfig.user,
+        host: this.emailConfig.host,
+        port: this.emailConfig.port,
+        hasPassword: !!this.emailConfig.password
+      });
+      
+      this.imap.once('ready', () => {
+        console.log('IMAP connection established successfully!');
+        this.openInbox((err, box) => {
+          if (err) {
+            console.error('Error opening inbox:', err);
+            reject(err);
+            return;
+          }
+          
+          console.log('Connected to inbox, searching for emails...');
+          
+          // Search for emails from raj2511tandel@gmail.com from last 24 hours (including seen emails)
+          const yesterday = new Date();
+          yesterday.setTime(yesterday.getTime() - 24 * 3600 * 1000);
+          
+          console.log('Searching for emails since:', yesterday.toISOString());
+          console.log('Looking for emails FROM: raj2511tandel@gmail.com');
+          
+          // Remove UNSEEN filter to get all emails from the sender
+          this.imap.search([['SINCE', yesterday], ['FROM', 'raj2511tandel@gmail.com']], (err, results) => {
+            if (err) {
+              console.error('Search error:', err);
+              reject(err);
+              return;
+            }
+            
+            console.log(`Search results: Found ${results.length} emails from raj2511tandel@gmail.com`);
+            
+            if (results.length === 0) {
+              console.log('No emails from raj2511tandel@gmail.com found in last 24 hours');
+              this.imap.end();
+              resolve();
+              return;
+            }
+            
+            console.log(`Processing ${results.length} emails from raj2511tandel@gmail.com`);
+            this.processEmails(results);
+          });
+        });
+      });
+
+      this.imap.once('error', (err) => {
+        console.error('IMAP connection error:', err);
+        console.error('Error details:', {
+          type: err.type,
+          textCode: err.textCode,
+          source: err.source,
+          message: err.message
+        });
+        reject(err);
+      });
+
+      this.imap.once('end', () => {
+        console.log('IMAP connection ended');
+        resolve();
+      });
+
+      console.log('Connecting to IMAP server...');
+      this.imap.connect();
+    });
+  }
+
+  openInbox(cb) {
+    this.imap.openBox('INBOX', false, cb);
+  }
+
+  processEmails(emailIds) {
+    let processedCount = 0;
+    
+    console.log(`Processing ${emailIds.length} emails...`);
+    
+    emailIds.forEach((id) => {
+      console.log(`Fetching email ID: ${id}`);
+      
+      try {
+        const fetch = this.imap.fetch(id, { 
+          bodies: ['HEADER', 'TEXT'],
+          struct: true 
+        });
+
+        fetch.on('message', (msg, seqno) => {
+          console.log(`Processing message ${seqno}`);
+          let buffer = '';
+          let headerBuffer = '';
+          
+          msg.on('body', (stream, info) => {
+            console.log(`Body stream: ${info.which}`);
+            if (info.which === 'TEXT') {
+              stream.on('data', (chunk) => {
+                buffer += chunk.toString('utf8');
+              });
+            } else if (info.which === 'HEADER') {
+              stream.on('data', (chunk) => {
+                headerBuffer += chunk.toString('utf8');
+              });
+            }
+          });
+
+          msg.once('attributes', (attrs) => {
+            console.log(`Message attributes received for ID: ${id}`);
+            console.log(`Full attributes:`, JSON.stringify(attrs, null, 2));
+            
+            // Check if message has attachments
+            if (attrs.struct) {
+              console.log(`Message has structure, checking for attachments...`);
+              this.processMessageStructure(attrs.struct, id, buffer, headerBuffer);
+            } else {
+              console.log(`No structure found, processing as text only`);
+              this.processEmailContent(buffer, headerBuffer, null, null, id);
+            }
+          });
+
+          msg.once('end', () => {
+            console.log(`Message ${seqno} processing completed`);
+            processedCount++;
+            
+            if (processedCount === emailIds.length) {
+              console.log('All emails processed, ending IMAP connection');
+              this.imap.end();
+            }
+          });
+        });
+
+        fetch.once('error', (err) => {
+          console.error(`Fetch error for email ID ${id}:`, err);
+          processedCount++;
+          
+          if (processedCount === emailIds.length) {
+            console.log('All emails processed (with errors), ending IMAP connection');
+            this.imap.end();
+          }
+        });
+      } catch (error) {
+        console.error(`Error setting up fetch for email ID ${id}:`, error);
+        processedCount++;
+        
+        if (processedCount === emailIds.length) {
+          console.log('All emails processed (with errors), ending IMAP connection');
+          this.imap.end();
+        }
+      }
+    });
+  }
+
+  processMessageStructure(struct, emailId, emailText, headerBuffer) {
+    try {
+      console.log(`Processing message structure for email ID: ${emailId}`);
+      
+      // Recursively find attachments in the structure
+      const attachments = this.findAttachments(struct);
+      console.log(`Found ${attachments.length} attachments`);
+      
+      if (attachments.length > 0) {
+        // Process each attachment
+        attachments.forEach((attachment, index) => {
+          console.log(`Processing attachment ${index + 1}: ${attachment.subtype}`);
+          this.fetchAttachment(attachment, emailId, emailText, headerBuffer);
+        });
+      } else {
+        // No attachments, process as text only
+        this.processEmailContent(emailText, headerBuffer, null, null, emailId);
+      }
+    } catch (error) {
+      console.error(`Error processing message structure:`, error);
+      this.processEmailContent(emailText, headerBuffer, null, null, emailId);
+    }
+  }
+
+  findAttachments(struct) {
+    const attachments = [];
+    
+    console.log(`Analyzing structure for attachments:`, JSON.stringify(struct, null, 2));
+    
+    // Handle Gmail's complex structure - struct is an array, not an object
+    if (Array.isArray(struct)) {
+      console.log(`Gmail array structure detected, processing each part`);
+      struct.forEach((part, index) => {
+        console.log(`Processing part ${index}:`, {
+          type: part.type,
+          subtype: part.subtype,
+          disposition: part.disposition,
+          partID: part.partID
+        });
+        
+        // Check if this part is an attachment
+        if (part.disposition && part.disposition.type === 'ATTACHMENT') {
+          console.log(`Found explicit attachment in part ${index}: ${part.subtype}`);
+          attachments.push(part);
+        }
+        // Check for inline files
+        else if (part.subtype && ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(part.subtype.toLowerCase())) {
+          console.log(`Found inline file in part ${index}: ${part.subtype}`);
+          attachments.push(part);
+        }
+        // Check for nested structures
+        else if (Array.isArray(part)) {
+          console.log(`Nested array in part ${index}, searching deeper`);
+          const nestedAttachments = this.findAttachments(part);
+          attachments.push(...nestedAttachments);
+        }
+        // Check for nested objects
+        else if (part && typeof part === 'object' && part.parts) {
+          console.log(`Nested object with parts in part ${index}, searching deeper`);
+          const nestedAttachments = this.findAttachments(part.parts);
+          attachments.push(...nestedAttachments);
+        }
+      });
+    }
+    // Handle traditional object structure
+    else if (struct && typeof struct === 'object') {
+      // Handle multipart messages (most common for emails with files)
+      if (struct.subtype && struct.subtype.toLowerCase() === 'mixed') {
+        console.log(`Multipart mixed message detected`);
+        if (struct.parts) {
+          struct.parts.forEach((part, index) => {
+            console.log(`Part ${index}:`, {
+              subtype: part.subtype,
+              disposition: part.disposition,
+              type: part.type
+            });
+            
+            // Check for explicit attachments
+            if (part.disposition && part.disposition.type === 'attachment') {
+              console.log(`Found explicit attachment in part ${index}`);
+              attachments.push(part);
+            }
+            // Check for inline images/PDFs
+            else if (part.subtype && ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(part.subtype.toLowerCase())) {
+              console.log(`Found inline file in part ${index}: ${part.subtype}`);
+              attachments.push(part);
+            }
+            // Check for nested multipart (Gmail often does this)
+            else if (part.subtype && part.subtype.toLowerCase() === 'related' && part.parts) {
+              console.log(`Found nested multipart in part ${index}, searching deeper`);
+              part.parts.forEach((nestedPart, nestedIndex) => {
+                console.log(`Nested part ${nestedIndex}:`, {
+                  subtype: nestedPart.subtype,
+                  disposition: nestedPart.disposition,
+                  type: nestedPart.type
+                });
+                
+                if (nestedPart.subtype && ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(nestedPart.subtype.toLowerCase())) {
+                  console.log(`Found file in nested part ${nestedIndex}: ${nestedPart.subtype}`);
+                  attachments.push(nestedPart);
+                }
+              });
+            }
+          });
+        }
+      } 
+      // Handle single attachment
+      else if (struct.disposition && struct.disposition.type === 'attachment') {
+        console.log(`Single attachment detected:`, struct);
+        attachments.push(struct);
+      }
+      // Handle inline images/PDFs in simple messages
+      else if (struct.subtype && ['pdf', 'png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp'].includes(struct.subtype.toLowerCase())) {
+        console.log(`Inline file detected:`, struct);
+        attachments.push(struct);
+      }
+      // Handle nested multipart (Gmail's complex structure)
+      else if (struct.parts) {
+        console.log(`Nested multipart detected, searching recursively`);
+        struct.parts.forEach(part => {
+          const nestedAttachments = this.findAttachments(part);
+          attachments.push(...nestedAttachments);
+        });
+      }
+    }
+    
+    console.log(`Total attachments found: ${attachments.length}`);
+    return attachments;
+  }
+
+  fetchAttachment(attachment, emailId, emailText, headerBuffer) {
+    try {
+      console.log(`Fetching attachment: ${attachment.subtype}`);
+      console.log(`Attachment details:`, {
+        partID: attachment.partID,
+        type: attachment.type,
+        subtype: attachment.subtype,
+        size: attachment.size
+      });
+      
+      // Use the correct part ID for fetching
+      const partId = attachment.partID || '2';
+      console.log(`Using part ID: ${partId} for fetching`);
+      
+      const fetch = this.imap.fetch(emailId, { 
+        bodies: [partId],
+        struct: false  // Don't fetch structure again
+      });
+
+      fetch.on('message', (msg, seqno) => {
+        console.log(`Processing attachment message ${seqno}`);
+        let attachmentData = null;
+        
+        msg.on('body', (stream, info) => {
+          console.log(`Attachment body stream: ${info.which}`);
+          if (info.which === partId) {
+            const chunks = [];
+            stream.on('data', (chunk) => {
+              chunks.push(chunk);
+            });
+            stream.on('end', () => {
+              attachmentData = Buffer.concat(chunks);
+              console.log(`Attachment data received: ${attachmentData.length} bytes`);
+              
+              // Process the attachment
+              this.processEmailContent(emailText, headerBuffer, attachment, attachmentData, emailId);
+            });
+          }
+        });
+
+        msg.once('end', () => {
+          console.log(`Attachment fetch completed for email ID: ${emailId}`);
+        });
+      });
+
+      fetch.once('error', (err) => {
+        console.error(`Error fetching attachment:`, err);
+        // Process email without attachment
+        this.processEmailContent(emailText, headerBuffer, null, null, emailId);
+      });
+    } catch (error) {
+      console.error(`Error setting up attachment fetch:`, error);
+      // Process email without attachment
+      this.processEmailContent(emailText, headerBuffer, null, null, emailId);
+    }
+  }
+
+  async processEmailContent(emailText, headerBuffer, attachment, attachmentData, emailId) {
+    try {
+      console.log(`Processing email ID: ${emailId}`);
+      console.log(`Has attachment: ${!!attachment}`);
+      console.log(`Has attachmentData: ${!!attachmentData}`);
+      
+      // Parse email content - combine text and headers
+      let fullEmailContent = '';
+      if (headerBuffer) {
+        fullEmailContent += headerBuffer + '\n\n';
+      }
+      if (emailText) {
+        fullEmailContent += emailText;
+      }
+      
+      console.log(`Full email content length: ${fullEmailContent.length}`);
+      
+      // Parse email content
+      const parsed = await simpleParser(fullEmailContent);
+      console.log(`Email subject: ${parsed.subject}`);
+      console.log(`Email from: ${parsed.from?.text}`);
+      
+      // Always process attachments from raj2511tandel@gmail.com
+      if (attachment && attachmentData) {
+        console.log(`Processing email from raj2511tandel@gmail.com: ${parsed.subject}`);
+        
+        // Get attachment details
+        const attachmentName = attachment.disposition?.params?.filename || `attachment_${Date.now()}`;
+        const attachmentType = attachment.subtype || 'unknown';
+        
+        console.log(`Attachment name: ${attachmentName}`);
+        console.log(`Attachment type: ${attachmentType}`);
+        console.log(`Attachment size: ${attachmentData.length} bytes`);
+        
+        // Save attachment to a new folder for email attachments (not uploads)
+        try {
+          const fs = await import('fs');
+          const path = await import('path');
+          
+          // Save to email_attachments folder instead of uploads
+          const emailAttachmentsDir = path.join(process.cwd(), 'email_attachments');
+          if (!fs.existsSync(emailAttachmentsDir)) {
+            fs.mkdirSync(emailAttachmentsDir, { recursive: true });
+          }
+          const emailAttachmentPath = path.join(emailAttachmentsDir, attachmentName);
+          fs.writeFileSync(emailAttachmentPath, attachmentData);
+          console.log(`Saved email attachment to email_attachments folder: ${emailAttachmentPath}`);
+          
+        } catch (saveError) {
+          console.error(`Error saving email attachment to file:`, saveError);
+        }
+        
+        // Convert attachment to base64 for display
+        const base64Attachment = attachmentData.toString('base64');
+        
+        // Create invoice object for display
+        const invoiceData = {
+          id: `email_${emailId}_${Date.now()}`,
+          emailSubject: parsed.subject || 'No Subject',
+          emailFrom: parsed.from?.text || 'raj2511tandel@gmail.com',
+          emailDate: parsed.date || new Date(),
+          attachmentName: attachmentName,
+          attachmentType: attachmentType,
+          attachmentData: base64Attachment,
+          mimeType: `application/${attachmentType}`,
+          isImage: ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(attachmentType.toLowerCase()),
+          isPDF: attachmentType.toLowerCase() === 'pdf',
+          filePath: `email_attachments/${attachmentName}`,
+          status: 'pending_approval' // Mark as pending until moved to uploads
+        };
+        
+        // Add to extracted invoices list
+        extractedInvoices.unshift(invoiceData);
+        
+        // Keep only last 50 invoices to prevent memory issues
+        if (extractedInvoices.length > 50) {
+          extractedInvoices = extractedInvoices.slice(0, 50);
+        }
+        
+        console.log(`Added invoice: ${attachmentName} to display list. Total invoices: ${extractedInvoices.length}`);
+        
+        // Mark email as read
+        this.markAsRead(emailId);
+      } else {
+        console.log(`No attachment found in email ID: ${emailId}`);
+        if (!attachment) console.log('Attachment is null/undefined');
+        if (!attachmentData) console.log('AttachmentData is null/undefined');
+      }
+    } catch (error) {
+      console.error('Error processing email:', error);
+    }
+  }
+
+  markAsRead(emailId) {
+    this.imap.addFlags(emailId, ['\\Seen'], (err) => {
+      if (err) {
+        console.error('Error marking email as read:', err);
+      }
+    });
+  }
+}
+
+// Initialize email monitor
+const emailMonitor = new EmailMonitor();
+
+// Email monitoring endpoints
+app.post('/api/email-monitor/start', (req, res) => {
+  try {
+    emailMonitor.start();
+    res.json({
+      success: true,
+      message: 'Email monitoring started successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to start email monitoring',
+      error: error.message
+    });
+  }
+});
+
+app.post('/api/email-monitor/stop', (req, res) => {
+  try {
+    emailMonitor.stop();
+    res.json({
+      success: true,
+      message: 'Email monitoring stopped successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to stop email monitoring',
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/email-monitor/status', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      isMonitoring: emailMonitor.isMonitoring,
+      message: emailMonitor.isMonitoring ? 'Email monitoring is active' : 'Email monitoring is inactive'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get email monitoring status',
+      error: error.message
+    });
+  }
+});
+
+// Get extracted invoices for display
+app.get('/api/email-monitor/invoices', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      invoices: extractedInvoices,
+      count: extractedInvoices.length
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get extracted invoices',
+      error: error.message
+    });
+  }
+});
+
+// Debug endpoint to check environment variables
+app.get('/api/email-monitor/debug', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      env: {
+        EMAIL_USER: process.env.EMAIL_USER || 'NOT_SET',
+        EMAIL_PASSWORD: process.env.EMAIL_PASSWORD ? 'SET' : 'NOT_SET',
+        EMAIL_HOST: process.env.EMAIL_HOST || 'NOT_SET',
+        EMAIL_PORT: process.env.EMAIL_PORT || 'NOT_SET'
+      },
+      message: 'Environment variables check'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check environment variables',
+      error: error.message
+    });
+  }
+});
+
+// Manual trigger to check emails immediately (for testing)
+app.post('/api/email-monitor/check-now', (req, res) => {
+  try {
+    console.log('Manual email check triggered');
+    emailMonitor.checkForNewEmails();
+    res.json({
+      success: true,
+      message: 'Manual email check triggered successfully'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to trigger manual email check',
+      error: error.message
+    });
+  }
+});
+
+// Clear extracted invoices
+app.delete('/api/email-monitor/invoices', (req, res) => {
+  try {
+    console.log('Clearing email attachments folder...');
+    
+    const emailAttachmentsDir = path.join(__dirname, 'email_attachments');
+    
+    if (!fs.existsSync(emailAttachmentsDir)) {
+      return res.json({
+        success: true,
+        message: 'Email attachments folder does not exist',
+        clearedFiles: 0
+      });
+    }
+    
+    // Get all files in email_attachments folder
+    const files = fs.readdirSync(emailAttachmentsDir)
+      .filter(file => !file.startsWith('.') && (file.endsWith('.pdf') || file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')));
+    
+    console.log(`Found ${files.length} email attachments to clear`);
+    
+    if (files.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No email attachments found to clear',
+        clearedFiles: 0
+      });
+    }
+    
+    // Delete all files from email_attachments folder
+    let clearedFiles = 0;
+    files.forEach(file => {
+      try {
+        const filePath = path.join(emailAttachmentsDir, file);
+        if (fs.statSync(filePath).isFile()) {
+          fs.unlinkSync(filePath);
+          console.log(`Deleted email attachment: ${file}`);
+          clearedFiles++;
+        }
+      } catch (error) {
+        console.error(`Error deleting file ${file}:`, error);
+      }
+    });
+    
+    // Clear the in-memory extracted invoices array
+    extractedInvoices = [];
+    
+    console.log(`Successfully cleared ${clearedFiles} email attachments`);
+    
+    res.json({
+      success: true,
+      message: `Successfully cleared ${clearedFiles} email attachments`,
+      clearedFiles: clearedFiles
+    });
+    
+  } catch (error) {
+    console.error('Error clearing email attachments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear email attachments'
+    });
+  }
+});
+
+app.post('/api/email-monitor/test-connection', async (req, res) => {
+  try {
+    const { email, password, host, port } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
+    
+    console.log('Testing connection with:', { email, host, port, hasPassword: !!password });
+    
+    const testConfig = {
+      user: email,
+      password: password,
+      host: host || 'imap.gmail.com',
+      port: port || 993,
+      tls: true,
+      tlsOptions: { rejectUnauthorized: false }
+    };
+    
+    const testImap = new Imap(testConfig);
+    
+    testImap.once('ready', () => {
+      console.log('Test connection successful!');
+      testImap.end();
+      res.json({
+        success: true,
+        message: 'Email connection test successful'
+      });
+    });
+    
+    testImap.once('error', (err) => {
+      console.error('Test connection failed:', err);
+      res.status(500).json({
+        success: false,
+        message: 'Email connection test failed',
+        error: err.message,
+        details: {
+          type: err.type,
+          textCode: err.textCode,
+          source: err.source
+        }
+      });
+    });
+    
+    console.log('Initiating test connection...');
+    testImap.connect();
+  } catch (error) {
+    console.error('Test connection error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to test email connection',
+      error: error.message
+    });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on:`);
   console.log(`  Local: http://localhost:${PORT}`);
@@ -1924,3 +2597,118 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`  Network: http://192.168.1.130:${PORT}`);
   console.log(`Uploads directory: ${uploadsDir}`);
 }); 
+
+// Move email attachments to uploads folder for processing
+app.post('/api/move-email-attachments', async (req, res) => {
+  try {
+    console.log('Moving email attachments to uploads folder...');
+    
+    const emailAttachmentsDir = path.join(__dirname, 'email_attachments');
+    const uploadsDir = path.join(__dirname, 'uploads');
+    
+    // Check if email_attachments folder exists
+    if (!fs.existsSync(emailAttachmentsDir)) {
+      return res.json({
+        success: true,
+        message: 'No email attachments folder found',
+        movedFiles: [],
+        totalFiles: 0
+      });
+    }
+    
+    // Create uploads folder if it doesn't exist
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    // Get all files in email_attachments folder
+    const files = fs.readdirSync(emailAttachmentsDir)
+      .filter(file => !file.startsWith('.') && (file.endsWith('.pdf') || file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')));
+    
+    console.log(`Found ${files.length} email attachments to move`);
+    
+    if (files.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No email attachments found to move',
+        movedFiles: [],
+        totalFiles: 0
+      });
+    }
+    
+    // Move files from email_attachments to uploads
+    const movedFiles = [];
+    for (const file of files) {
+      const sourcePath = path.join(emailAttachmentsDir, file);
+      const destPath = path.join(uploadsDir, file);
+      
+      try {
+        fs.copyFileSync(sourcePath, destPath);
+        fs.unlinkSync(sourcePath); // Remove from email_attachments
+        movedFiles.push(file);
+        console.log(`Moved email attachment: ${file}`);
+      } catch (error) {
+        console.error(`Error moving file ${file}:`, error);
+      }
+    }
+    
+    console.log(`Successfully moved ${movedFiles.length} email attachments to uploads`);
+    
+    res.json({
+      success: true,
+      message: `Moved ${movedFiles.length} email attachments to uploads folder`,
+      movedFiles: movedFiles,
+      totalFiles: files.length
+    });
+    
+  } catch (error) {
+    console.error('Error moving email attachments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to move email attachments'
+    });
+  }
+});
+
+// Get list of email attachments
+app.get('/api/email-attachments', async (req, res) => {
+  try {
+    const emailAttachmentsDir = path.join(__dirname, 'email_attachments');
+    
+    if (!fs.existsSync(emailAttachmentsDir)) {
+      return res.json({
+        success: true,
+        attachments: [],
+        message: 'No email attachments folder found'
+      });
+    }
+    
+    const files = fs.readdirSync(emailAttachmentsDir)
+      .filter(file => !file.startsWith('.') && (file.endsWith('.pdf') || file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')))
+      .map(file => {
+        const filePath = path.join(emailAttachmentsDir, file);
+        const stats = fs.statSync(filePath);
+        return {
+          filename: file,
+          size: stats.size,
+          modifiedAt: stats.mtime,
+          path: `email_attachments/${file}`
+        };
+      });
+    
+    res.json({
+      success: true,
+      attachments: files,
+      message: `Found ${files.length} email attachments`
+    });
+    
+  } catch (error) {
+    console.error('Error getting email attachments:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get email attachments'
+    });
+  }
+});
+
+// Check if approval is needed

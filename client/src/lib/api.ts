@@ -1,6 +1,6 @@
 const getApiBaseUrl = () => {
-  // Use relative URL for proxy configuration
-  return '/api';
+  // Use the correct backend server URL
+  return 'http://192.168.1.70:3002/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -555,10 +555,10 @@ export const api = {
     }
   },
 
-  // Clear all folders (uploads, split_pages, manual_split_pages)
+  // Clear all folders
   async clearAllFolders(): Promise<{ success: boolean; message?: string; clearedFolders?: string[] }> {
     try {
-      const response = await fetch('/api/clear-all-folders', {
+      const response = await fetch(`${API_BASE_URL}/clear-all-folders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -566,10 +566,64 @@ export const api = {
       });
       
       const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to clear all folders');
+      }
+
       return result;
     } catch (error) {
-      console.error('Error clearing all folders:', error);
-      return { success: false, message: 'Failed to clear folders' };
+      console.error('Clear all folders error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to clear all folders'
+      };
+    }
+  },
+
+  // Get email attachments
+  async getEmailAttachments(): Promise<{ success: boolean; attachments?: any[]; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/email-attachments`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get email attachments');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Get email attachments error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get email attachments'
+      };
+    }
+  },
+
+  // Move email attachments to uploads folder
+  async moveEmailAttachments(): Promise<{ success: boolean; message?: string; movedFiles?: string[]; totalFiles?: number }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/move-email-attachments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to move email attachments');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Move email attachments error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to move email attachments'
+      };
     }
   }
 }; 

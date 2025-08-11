@@ -574,15 +574,15 @@ export default function Upload() {
         
         toast({
           title: "Processing Started",
-         description: "Processing has started. Waiting for vendor and PO approval...",
+         description: "Processing has started. Waiting for vendor approval...",
         });
         
-       console.log('🚀 Processing started, beginning to poll for vendor and PO approval...');
+       console.log('🚀 Processing started, beginning to poll for vendor approval...');
        console.log('⏰ Start time:', new Date().toISOString());
        
-       // Start polling for both vendor and PO approval needed
+       // Start polling for vendor approval ONLY
+       // PO approval polling will start AFTER vendor approval is completed
         pollForApproval();
-       pollForPOApproval();
         
       } else {
         toast({
@@ -620,6 +620,16 @@ export default function Upload() {
            console.log('📊 Number of matches found:', result.matches.length);
            console.log('📅 Current time:', new Date().toISOString());
            
+           // Check if this is fresh data (not old data from previous runs)
+           const currentDataHash = createDataHash(result.matches);
+           if (currentDataHash === lastSeenDataHash) {
+             console.log('⚠️ Vendor data hash unchanged - this might be old data, continuing to poll...');
+             return false; // Continue polling for fresh data
+           }
+           
+           console.log('🎉 Fresh vendor data detected! Hash:', currentDataHash);
+           console.log('🎉 Previous hash:', lastSeenDataHash);
+           
            // Show approval dialog if backend says approval is needed
            // The backend now handles the timing logic properly
            console.log('🎉 Backend detected approval needed!');
@@ -641,6 +651,7 @@ export default function Upload() {
           setShowVendorApproval(true);
           setHasShownApprovalDialog(true); // Mark that we've shown the dialog
            setIsProcessing(false); // Stop the loading animation when dialog appears
+           setLastSeenDataHash(currentDataHash); // Store the hash of this data
           return true; // Stop polling
         }
         
@@ -696,6 +707,16 @@ export default function Upload() {
           console.log('📊 Number of PO matches found:', result.matches.length);
           console.log('📅 Current time:', new Date().toISOString());
           
+          // Check if this is fresh data (not old data from previous runs)
+          const currentDataHash = createPODataHash(result.matches);
+          if (currentDataHash === lastSeenPODataHash) {
+            console.log('⚠️ PO data hash unchanged - this might be old data, continuing to poll...');
+            return false; // Continue polling for fresh data
+          }
+          
+          console.log('🎉 Fresh PO data detected! Hash:', currentDataHash);
+          console.log('🎉 Previous hash:', lastSeenPODataHash);
+          
           // Show PO approval dialog if backend says approval is needed
           console.log('🎉 Backend detected PO approval needed!');
           console.log('🎉 Showing PO approval dialog with matches:', result.matches);
@@ -714,6 +735,7 @@ export default function Upload() {
           setShowPOApproval(true);
           setHasShownPOApprovalDialog(true); // Mark that we've shown the dialog
           setIsProcessing(false); // Stop the loading animation when dialog appears
+          setLastSeenPODataHash(currentDataHash); // Store the hash of this data
           return true; // Stop polling
         }
         
@@ -864,10 +886,10 @@ export default function Upload() {
         setVendorMatches([]); // Clear vendor matches after approval
         setLastSeenDataHash(''); // Reset data hash after approval
         
-        console.log('📡 Starting to poll for processing completion...');
+        console.log('📡 Starting to poll for PO approval...');
         
-        // Poll for processing completion
-        pollForProcessingCompletion();
+        // Poll for PO approval (not processing completion)
+        pollForPOApproval();
         
       } else {
         console.error('❌ Approval failed:', result.message);
@@ -882,7 +904,6 @@ export default function Upload() {
       toast({
         title: "Approval Failed",
         description: "Failed to approve vendor matches",
-        variant: "destructive",
       });
     }
   };
