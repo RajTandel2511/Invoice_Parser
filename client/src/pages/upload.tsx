@@ -338,8 +338,8 @@ export default function Upload() {
   const { data: processedInvoices, isLoading: invoicesLoading, error: invoicesError } = useQuery({
     queryKey: ['processed-invoices'],
     queryFn: async () => {
-      console.log('Fetching invoices from /api/invoices...');
-      const response = await fetch('/api/invoices');
+      console.log('Fetching invoices from backend...');
+      const response = await fetch('http://192.168.1.70:3002/api/invoices');
       const data = await response.json();
       console.log('API response:', data);
       if (data.success) {
@@ -1007,14 +1007,14 @@ export default function Upload() {
   const [isClearing, setIsClearing] = useState(false);
 
   const handleClearAll = async () => {
-    if (window.confirm('Are you sure you want to clear all folders? This will delete all files from uploads, split_pages, and other folders. This action cannot be undone.')) {
+    if (window.confirm('Are you sure you want to clear all processing folders? This will delete all files from uploads, split_pages, manual_split_pages, OCR_text_Test, processed, and raw_pdfs folders. This action cannot be undone.')) {
       setIsClearing(true);
       try {
-        const result = await api.clearAllFolders();
+        const result = await api.clearProcessingFolders();
         if (result.success) {
           toast({
-            title: "All Folders Cleared",
-            description: `Successfully cleared ${result.clearedFolders?.length || 0} folders!`,
+            title: "All Processing Folders Cleared",
+            description: `Successfully cleared ${result.clearedFolders?.length || 0} processing folders: ${result.clearedFolders?.join(', ') || 'uploads, split_pages, manual_split_pages, OCR_text_Test, processed, raw_pdfs'}!`,
           });
           // Refresh the uploaded files
           refreshUploadedFiles();

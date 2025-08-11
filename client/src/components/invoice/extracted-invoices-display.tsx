@@ -16,6 +16,7 @@ import {
   Upload
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 interface ExtractedInvoice {
   id: string;
@@ -46,6 +47,7 @@ export default function ExtractedInvoicesDisplay() {
 
   const fetchInvoices = async () => {
     try {
+      // Use the proper API base URL
       const response = await fetch('http://192.168.1.70:3002/api/email-monitor/invoices');
       const data = await response.json();
       if (data.success) {
@@ -56,28 +58,33 @@ export default function ExtractedInvoicesDisplay() {
     }
   };
 
-  const clearAllInvoices = async () => {
-    if (!confirm('Are you sure you want to clear all extracted invoices?')) return;
+  const clearEmailAttachments = async () => {
+    if (!confirm('Are you sure you want to clear the email_attachments folder? This will remove all extracted email attachments.')) return;
     
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/invoices', {
-        method: 'DELETE'
-      });
+      const result = await api.clearEmailAttachments();
       
-      const data = await response.json();
-      if (data.success) {
+      if (result.success) {
+        // Clear the extracted invoices display to match the cleared folder
         setInvoices([]);
         setSelectedInvoice(null);
+        
         toast({
-          title: "Invoices Cleared",
-          description: "All extracted invoices have been cleared",
+          title: "Email Attachments Cleared",
+          description: `Successfully cleared email_attachments folder and removed ${invoices.length} invoices from display`,
+        });
+      } else {
+        toast({
+          title: "Clear Failed",
+          description: result.message || "Failed to clear email attachments folder",
+          variant: "destructive"
         });
       }
     } catch (error) {
       toast({
         title: "Clear Failed",
-        description: "Failed to clear invoices",
+        description: "Failed to clear email attachments folder",
         variant: "destructive"
       });
     } finally {
@@ -101,15 +108,12 @@ export default function ExtractedInvoicesDisplay() {
 
     setIsExporting(true);
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/move-email-attachments', {
-        method: 'POST'
-      });
+      const result = await api.moveEmailAttachments();
       
-      const data = await response.json();
-      if (data.success) {
+      if (result.success) {
         toast({
           title: "Export Successful",
-          description: `${data.movedCount || invoices.length} invoice(s) transferred to uploads folder`,
+          description: `${result.totalFiles || invoices.length} invoice(s) transferred to uploads folder`,
         });
         
         // Clear the extracted invoices display
@@ -123,7 +127,7 @@ export default function ExtractedInvoicesDisplay() {
       } else {
         toast({
           title: "Export Failed",
-          description: data.message || "Failed to transfer invoices",
+          description: result.message || "Failed to transfer invoices",
           variant: "destructive"
         });
       }
@@ -246,14 +250,14 @@ export default function ExtractedInvoicesDisplay() {
             {isExporting ? 'Exporting...' : 'Export to Uploads'}
           </Button>
           <Button
-            onClick={clearAllInvoices}
+            onClick={clearEmailAttachments}
             disabled={isLoading}
             variant="destructive"
             size="sm"
             className="flex items-center gap-2"
           >
             <Trash2 className="h-4 w-4" />
-            Clear All
+            Clear Email Attachments
           </Button>
         </div>
       </div>

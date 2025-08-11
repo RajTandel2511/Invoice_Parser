@@ -1,6 +1,6 @@
 const getApiBaseUrl = () => {
-  // Use relative URL for proxy configuration
-  return '/api';
+  // Point to the backend server port
+  return 'http://192.168.1.70:3002/api';
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -555,22 +555,52 @@ export const api = {
     }
   },
 
-  // Clear all folders
-  async clearAllFolders(): Promise<{ success: boolean; message?: string; clearedFolders?: string[] }> {
+  // Clear email attachments folder
+  async clearEmailAttachments(): Promise<{ success: boolean; message?: string; clearedFolders?: string[] }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/clear-all-folders`);
+      const response = await fetch(`${API_BASE_URL}/clear-all-folders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       const result = await response.json();
       
       if (!response.ok) {
-        throw new Error(result.message || 'Failed to clear all folders');
+        throw new Error(result.message || 'Failed to clear email attachments folder');
       }
 
       return result;
     } catch (error) {
-      console.error('Clear all folders error:', error);
+      console.error('Clear email attachments error:', error);
       return {
         success: false,
-        message: error instanceof Error ? error.message : 'Failed to clear all folders'
+        message: error instanceof Error ? error.message : 'Failed to clear email attachments folder'
+      };
+    }
+  },
+
+  // Clear processing folders (uploads, split_pages, manual_split_pages)
+  async clearProcessingFolders(): Promise<{ success: boolean; message?: string; clearedFolders?: string[] }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/clear-processing-folders`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to clear processing folders');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Clear processing folders error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to clear processing folders'
       };
     }
   },

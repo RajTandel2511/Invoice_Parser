@@ -1776,9 +1776,9 @@ app.post('/api/export-grouped-pdfs', async (req, res) => {
 // Clear all folders endpoint
 app.post('/api/clear-all-folders', (req, res) => {
   try {
+    // Only clear the email_attachments folder
     const foldersToClear = [
-      uploadsDir,
-      path.join(__dirname, 'split_pages')
+      path.join(__dirname, 'email_attachments')
     ];
     
     const clearedFolders = [];
@@ -1792,7 +1792,7 @@ app.post('/api/clear-all-folders', (req, res) => {
               const filePath = path.join(folderPath, file);
               if (fs.statSync(filePath).isFile()) {
                 fs.unlinkSync(filePath);
-                console.log(`Deleted file: ${filePath}`);
+                console.log(`Deleted email attachment: ${filePath}`);
               }
             }
           });
@@ -1805,14 +1805,62 @@ app.post('/api/clear-all-folders', (req, res) => {
     
     res.json({
       success: true,
-      message: `Successfully cleared ${clearedFolders.length} folders`,
+      message: `Successfully cleared email attachments folder`,
       clearedFolders
     });
   } catch (error) {
-    console.error('Error clearing all folders:', error);
+    console.error('Error clearing email attachments folder:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to clear folders'
+      message: 'Failed to clear email attachments folder'
+    });
+  }
+});
+
+// Clear processing folders endpoint (uploads, split_pages, manual_split_pages)
+app.post('/api/clear-processing-folders', (req, res) => {
+  try {
+    const foldersToClear = [
+      uploadsDir,
+      path.join(__dirname, 'split_pages'),
+      path.join(__dirname, 'manual_split_pages'),
+      path.join(__dirname, 'process', 'data', 'OCR_text_Test'),
+      path.join(__dirname, 'process', 'data', 'processed'),
+      path.join(__dirname, 'process', 'data', 'raw_pdfs')
+    ];
+    
+    const clearedFolders = [];
+    
+    foldersToClear.forEach(folderPath => {
+      if (fs.existsSync(folderPath)) {
+        try {
+          const files = fs.readdirSync(folderPath);
+          files.forEach(file => {
+            if (file !== '.gitkeep') { // Preserve .gitkeep files
+              const filePath = path.join(folderPath, file);
+              if (fs.statSync(filePath).isFile()) {
+                fs.unlinkSync(filePath);
+                console.log(`Deleted processing file: ${filePath}`);
+              }
+            }
+          });
+          clearedFolders.push(path.basename(folderPath));
+        } catch (error) {
+          console.error(`Error clearing folder ${folderPath}:`, error);
+        }
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: `Successfully cleared ${clearedFolders.length} processing folders`,
+      clearedFolders
+    });
+  } catch (error) {
+    console.error('Error clearing processing folders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear processing folders'
     });
   }
 });
