@@ -45,6 +45,8 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
   const [manualSplitPoints, setManualSplitPoints] = useState<number[]>([]);
   const [isManualSplitting, setIsManualSplitting] = useState(false);
   const [pageGroups, setPageGroups] = useState<number[][]>([]);
+  const [pageToDelete, setPageToDelete] = useState<PageInfo | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Filter only PDF files - memoized to prevent infinite re-renders
   const pdfFiles = useMemo(() => 
@@ -171,6 +173,63 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
       console.error('Preview original PDF error:', error);
       alert('Failed to open preview.');
     }
+  };
+
+  const handleDeletePage = (pageToDelete: PageInfo) => {
+    if (isSplitMode) {
+      // Remove from split pages
+      setSplitPages(prev => prev.filter(page => 
+        !(page.filename === pageToDelete.filename && page.pageNumber === pageToDelete.pageNumber)
+      ));
+      
+      // Update page groups to remove references to deleted page
+      setPageGroups(prev => prev.map(group => 
+        group.filter(pageNum => pageNum !== pageToDelete.pageNumber)
+      ).filter(group => group.length > 0)); // Remove empty groups
+      
+      console.log(`Deleted page ${pageToDelete.pageNumber} from split mode`);
+    } else {
+      // Remove from page previews
+      setPagePreviews(prev => prev.filter(page => 
+        !(page.filename === pageToDelete.filename && page.pageNumber === pageToDelete.pageNumber)
+      ));
+      
+      console.log(`Deleted page ${pageToDelete.pageNumber} from preview mode`);
+    }
+  };
+
+  const confirmDeletePage = (page: PageInfo) => {
+    setPageToDelete(page);
+    setShowDeleteConfirm(true);
+  };
+
+  const executeDeletePage = () => {
+    if (!pageToDelete) return;
+    
+    if (isSplitMode) {
+      // Remove from split pages
+      setSplitPages(prev => prev.filter(page => 
+        !(page.filename === pageToDelete.filename && page.pageNumber === pageToDelete.pageNumber)
+      ));
+      
+      // Update page groups to remove references to deleted page
+      setPageGroups(prev => prev.map(group => 
+        group.filter(pageNum => pageNum !== pageToDelete.pageNumber)
+      ).filter(group => group.length > 0)); // Remove empty groups
+      
+      console.log(`Deleted page ${pageToDelete.pageNumber} from split mode`);
+    } else {
+      // Remove from page previews
+      setPagePreviews(prev => prev.filter(page => 
+        !(page.filename === pageToDelete.filename && page.pageNumber === pageToDelete.pageNumber)
+      ));
+      
+      console.log(`Deleted page ${pageToDelete.pageNumber} from preview mode`);
+    }
+    
+    // Close confirmation dialog
+    setShowDeleteConfirm(false);
+    setPageToDelete(null);
   };
 
   const handleSplitToggle = async (checked: boolean) => {
@@ -585,7 +644,25 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                 ? 'gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' 
                 : 'gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
             } ${isManualSplitMode ? 'cursor-crosshair' : ''}`}>
-              {(isSplitMode ? splitPages : pagePreviews).map((page, index, arr) => (
+              {(isSplitMode ? splitPages : pagePreviews).length === 0 ? (
+                <div className="col-span-full p-8 text-center">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="p-4 bg-muted/50 rounded-full">
+                      <FileText className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-medium text-foreground mb-2">No Pages Available</p>
+                      <p className="text-muted-foreground">
+                        {isSplitMode 
+                          ? 'All pages have been deleted from split mode.' 
+                          : 'All pages have been deleted from preview mode.'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                (isSplitMode ? splitPages : pagePreviews).map((page, index, arr) => (
                 <div key={`${page.filename}-${page.pageNumber}`} className="relative">
                   <div
                     className="relative group cursor-pointer"
@@ -628,6 +705,22 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                       <Badge variant="secondary" className="text-xs px-1 py-0.5">{page.pageNumber}</Badge>
                     </div>
                     
+                    {/* Delete button - always visible on each page */}
+                    <div className="absolute -top-1 -left-1">
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          confirmDeletePage(page);
+                        }}
+                        className="h-6 w-6 p-0 rounded-full shadow-lg hover:bg-red-700 transition-colors duration-200"
+                        title={`Delete page ${page.pageNumber}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    
                     {/* Vertical dashed separator for split mode - clickable for grouping */}
                     {isSplitMode && index < arr.length - 1 && (
                       <div 
@@ -666,7 +759,8 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                     </div>
                   )}
                 </div>
-              ))}
+              ))
+            )}
             </div>
             
             {/* Show current page grouping status */}
@@ -720,6 +814,40 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
           </div>
         )}
       </CardContent>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && pageToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background border border-border rounded-lg p-6 max-w-md mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 dark:bg-red-900/20 rounded-full">
+                <X className="h-5 w-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-foreground">Delete Page</h3>
+            </div>
+            <p className="text-muted-foreground mb-6">
+              Are you sure you want to delete <strong>Page {pageToDelete.pageNumber}</strong> from <strong>{pageToDelete.filename}</strong>?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setPageToDelete(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={executeDeletePage}
+              >
+                Delete Page
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }
