@@ -1694,6 +1694,50 @@ app.post('/api/export-split-pdfs', async (req, res) => {
   }
 });
 
+// Clear all folders endpoint
+app.post('/api/clear-all-folders', (req, res) => {
+  try {
+    const foldersToClear = [
+      uploadsDir,
+      path.join(__dirname, 'split_pages')
+    ];
+    
+    const clearedFolders = [];
+    
+    foldersToClear.forEach(folderPath => {
+      if (fs.existsSync(folderPath)) {
+        try {
+          const files = fs.readdirSync(folderPath);
+          files.forEach(file => {
+            if (file !== '.gitkeep') { // Preserve .gitkeep files
+              const filePath = path.join(folderPath, file);
+              if (fs.statSync(filePath).isFile()) {
+                fs.unlinkSync(filePath);
+                console.log(`Deleted file: ${filePath}`);
+              }
+            }
+          });
+          clearedFolders.push(path.basename(folderPath));
+        } catch (error) {
+          console.error(`Error clearing folder ${folderPath}:`, error);
+        }
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: `Successfully cleared ${clearedFolders.length} folders`,
+      clearedFolders
+    });
+  } catch (error) {
+    console.error('Error clearing all folders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to clear folders'
+    });
+  }
+});
+
 // Check if uploads folder is empty
 app.get('/api/check-uploads-folder', (req, res) => {
   try {

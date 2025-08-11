@@ -983,6 +983,44 @@ export default function Upload() {
     }
   };
 
+  const [isClearing, setIsClearing] = useState(false);
+
+  const handleClearAll = async () => {
+    if (window.confirm('Are you sure you want to clear all folders? This will delete all files from uploads, split_pages, and other folders. This action cannot be undone.')) {
+      setIsClearing(true);
+      try {
+        const result = await api.clearAllFolders();
+        if (result.success) {
+          toast({
+            title: "All Folders Cleared",
+            description: `Successfully cleared ${result.clearedFolders?.length || 0} folders!`,
+          });
+          // Refresh the uploaded files
+          refreshUploadedFiles();
+          // Reset processing states
+          setProcessingComplete(false);
+          setVendorMatches([]);
+          setPOMatches([]);
+        } else {
+          toast({
+            title: "Clear All Failed",
+            description: result.message || "Failed to clear all folders.",
+            variant: "destructive",
+          });
+        }
+      } catch (error) {
+        console.error('Error clearing all folders:', error);
+        toast({
+          title: "Clear All Failed",
+          description: "Failed to clear all folders.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsClearing(false);
+      }
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       {/* Loading Animation */}
@@ -1025,11 +1063,27 @@ export default function Upload() {
       />
 
       <div className="w-full px-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Invoice Dashboard</h1>
-          <p className="text-muted-foreground">
-            Upload and manage your invoices with automated processing and PO matching.
-          </p>
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Invoice Dashboard</h1>
+            <p className="text-muted-foreground">
+              Upload and manage your invoices with automated processing and PO matching.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClearAll}
+            disabled={isClearing}
+            className="h-9 px-4 text-sm bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-700 shadow-sm"
+          >
+            {isClearing ? (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-600 mr-2"></div>
+            ) : (
+              <span>🗑️</span>
+            )}
+            Clear All
+          </Button>
         </div>
 
         <div className="grid gap-6">

@@ -236,7 +236,18 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
       
       if (result.success) {
         console.log('Manual split created successfully:', result.splitFiles);
-        alert(`Successfully created ${groups.length} custom PDF groups!`);
+        
+        // Automatically export the grouped PDFs to uploads folder
+        console.log('Auto-exporting grouped PDFs to uploads folder...');
+        const exportResult = await api.exportSplitPDFs();
+        
+        if (exportResult.success) {
+          console.log('Grouped PDFs exported successfully:', exportResult.exportedFiles);
+          alert(`Successfully created ${groups.length} custom PDF groups and exported them to uploads folder!`);
+        } else {
+          console.error('Failed to export grouped PDFs:', exportResult.message);
+          alert(`PDFs created but failed to export: ${exportResult.message}`);
+        }
         
         // Exit manual split mode
         setIsManualSplitMode(false);
@@ -327,7 +338,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">Page Break All</span>
-              <Switch checked={isSplitMode} disabled={isSplitting} onCheckedChange={handleSplitToggle} />
+              <Switch checked={isSplitMode} disabled={isSplitting || isManualSplitMode} onCheckedChange={handleSplitToggle} />
               
               {/* Manual Split button */}
               <Button
@@ -407,7 +418,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
             )}
             <div className={`grid ${
                 isSplitMode 
-                ? 'gap-2 grid-cols-[repeat(auto-fit,minmax(150px,1fr))]' 
+                ? 'gap-2 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5' 
                 : 'gap-6 grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5'
             } ${isManualSplitMode ? 'cursor-crosshair' : ''}`}>
               {(isSplitMode ? splitPages : pagePreviews).map((page, index, arr) => (
@@ -462,7 +473,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                   {/* Clickable split zone - positioned on the right edge of the page */}
                   {isManualSplitMode && index < arr.length - 1 && (
                     <div
-                      className="absolute -right-5 top-0 bottom-0 w-3 cursor-crosshair hover:bg-purple-100/50 dark:hover:bg-purple-900/20 transition-colors duration-200 group z-10"
+                      className="absolute -right-3 top-0 bottom-0 w-1 cursor-crosshair hover:bg-purple-100/50 dark:hover:bg-purple-900/20 transition-colors duration-200 group z-10"
                       onClick={() => handleManualSplitPoint(page.pageNumber)}
                     >
                       {/* Vertical split line when active */}

@@ -526,5 +526,23 @@ export const api = {
         message: error instanceof Error ? error.message : 'Failed to split PDF pages'
       };
     }
+  },
+
+  // Clear all folders (uploads, split_pages, manual_split_pages)
+  async clearAllFolders(): Promise<{ success: boolean; message?: string; clearedFolders?: string[] }> {
+    try {
+      const response = await fetch('/api/clear-all-folders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Error clearing all folders:', error);
+      return { success: false, message: 'Failed to clear folders' };
+    }
   }
 }; 
