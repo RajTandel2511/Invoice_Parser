@@ -44,6 +44,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
   const [isManualSplitMode, setIsManualSplitMode] = useState(false);
   const [manualSplitPoints, setManualSplitPoints] = useState<number[]>([]);
   const [isManualSplitting, setIsManualSplitting] = useState(false);
+  const [pageGroups, setPageGroups] = useState<number[][]>([]);
 
   // Filter only PDF files - memoized to prevent infinite re-renders
   const pdfFiles = useMemo(() => 
@@ -159,6 +160,8 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
           }
           setSplitPages(splitPageInfos);
           setIsSplitMode(true);
+          // Initialize page groups - each page starts as individual
+          setPageGroups(splitPageInfos.map((_, index) => [index + 1]));
           await generateSplitThumbnails(splitPageInfos, true);
         }
       } finally {
@@ -167,6 +170,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
     } else {
       setIsSplitMode(false);
       setSplitPages([]);
+      setPageGroups([]);
     }
   };
 
@@ -191,6 +195,118 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
         // Add split point
         return [...prev, pageNumber].sort((a, b) => a - b);
       }
+    });
+  };
+
+  const handlePageGrouping = (pageNumber: number) => {
+    console.log(`🔄 Grouping: Clicked green line after page ${pageNumber}, trying to group with page ${pageNumber + 1}`);
+    
+    setPageGroups(prev => {
+      // pageNumber represents the page BEFORE the green line
+      // We want to group pageNumber with pageNumber + 1
+      const nextPage = pageNumber + 1;
+      
+      if (nextPage > splitPages.length) {
+        console.log(`❌ Can't group beyond the last page (${splitPages.length})`);
+        return prev;
+      }
+      
+      console.log(`📋 Current groups:`, prev);
+      console.log(`🎯 Trying to group page ${pageNumber} with page ${nextPage}`);
+      
+      // Find if either page is already in a group
+      let page1GroupIndex = -1;
+      let page2GroupIndex = -1;
+      
+      for (let i = 0; i < prev.length; i++) {
+        if (prev[i].includes(pageNumber)) {
+          page1GroupIndex = i;
+        }
+        if (prev[i].includes(nextPage)) {
+          page2GroupIndex = i;
+        }
+      }
+      
+      console.log(`🔍 Page ${pageNumber} is in group ${page1GroupIndex}, Page ${nextPage} is in group ${page2GroupIndex}`);
+      
+      // Case 1: Both pages are in the same group - ungroup them
+      if (page1GroupIndex !== -1 && page1GroupIndex === page2GroupIndex) {
+        console.log(`✂️ Ungrouping: Both pages are in the same group ${page1GroupIndex}`);
+        const currentGroup = prev[page1GroupIndex];
+        if (currentGroup.length === 2 && currentGroup.includes(pageNumber) && currentGroup.includes(nextPage)) {
+          // Simple case: just split the 2-page group
+          const newGroups = [...prev];
+          newGroups[page1GroupIndex] = [pageNumber];
+          newGroups.splice(page1GroupIndex + 1, 0, [nextPage]);
+          console.log(`✅ Split 2-page group into individual pages`);
+          return newGroups;
+        } else if (currentGroup.length > 2) {
+          // Complex case: split a larger group
+          const newGroups = [...prev];
+          const beforePages = currentGroup.filter(p => p < pageNumber);
+          const afterPages = currentGroup.filter(p => p > nextPage);
+          
+          if (beforePages.length > 0 && afterPages.length > 0) {
+            // Split into three groups: before, middle, after
+            newGroups[page1GroupIndex] = beforePages;
+            newGroups.splice(page1GroupIndex + 1, 0, [pageNumber], [nextPage], afterPages);
+          } else if (beforePages.length > 0) {
+            // Split into two groups: before, middle
+            newGroups[page1GroupIndex] = beforePages;
+            newGroups.splice(page1GroupIndex + 1, 0, [pageNumber], [nextPage]);
+          } else if (afterPages.length > 0) {
+            // Split into two groups: middle, after
+            newGroups[page1GroupIndex] = [pageNumber];
+            newGroups.splice(page1GroupIndex + 1, 0, [nextPage], afterPages);
+          } else {
+            // Just split the two pages
+            newGroups[page1GroupIndex] = [pageNumber];
+            newGroups.splice(page1GroupIndex + 1, 0, [nextPage]);
+          }
+          console.log(`✅ Split larger group into multiple groups`);
+          return newGroups;
+        }
+      }
+      
+      // Case 2: Pages are in different groups - merge the groups
+      if (page1GroupIndex !== -1 && page2GroupIndex !== -1 && page1GroupIndex !== page2GroupIndex) {
+        console.log(`🔗 Merging: Pages are in different groups, merging groups ${page1GroupIndex} and ${page2GroupIndex}`);
+        const newGroups = [...prev];
+        const group1 = newGroups[page1GroupIndex];
+        const group2 = newGroups[page2GroupIndex];
+        
+        // Merge the groups
+        newGroups[page1GroupIndex] = [...group1, ...group2].sort((a, b) => a - b);
+        newGroups.splice(page2GroupIndex, 1);
+        console.log(`✅ Merged groups into one`);
+        return newGroups;
+      }
+      
+      // Case 3: One page is in a group, other is not - add the free page to the group
+      if (page1GroupIndex !== -1 && page2GroupIndex === -1) {
+        console.log(`➕ Adding page ${nextPage} to existing group ${page1GroupIndex}`);
+        const newGroups = [...prev];
+        newGroups[page1GroupIndex] = [...newGroups[page1GroupIndex], nextPage].sort((a, b) => a - b);
+        console.log(`✅ Added page to existing group`);
+        return newGroups;
+      }
+      
+      if (page2GroupIndex !== -1 && page1GroupIndex === -1) {
+        console.log(`➕ Adding page ${pageNumber} to existing group ${page2GroupIndex}`);
+        const newGroups = [...prev];
+        newGroups[page2GroupIndex] = [pageNumber, ...newGroups[page2GroupIndex]].sort((a, b) => a - b);
+        console.log(`✅ Added page to existing group`);
+        return newGroups;
+      }
+      
+      // Case 4: Neither page is in a group - create a new group
+      if (page1GroupIndex === -1 && page2GroupIndex === -1) {
+        console.log(`🆕 Creating new group with pages ${pageNumber} and ${nextPage}`);
+        return [...prev, [pageNumber, nextPage]];
+      }
+      
+      console.log(`⚠️ No action taken, returning current groups`);
+      return prev;
     });
   };
 
@@ -269,19 +385,28 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
     
     setIsExporting(true);
     try {
-      console.log('Exporting split PDFs to uploads folder...');
-      const result = await api.exportSplitPDFs();
+      console.log('Exporting grouped PDFs to uploads folder...');
+      
+      // Use page groups if available, otherwise export individual pages
+      const groupsToExport = pageGroups.length > 0 ? pageGroups : splitPages.map((_, index) => [index + 1]);
+      
+      console.log('Exporting groups:', groupsToExport);
+      
+      // Use the new grouped export API
+      const result = await api.exportGroupedPDFs(groupsToExport);
       
       if (result.success) {
-        console.log('Split PDFs exported successfully:', result.exportedFiles);
-        alert(`Successfully exported ${result.exportedFiles?.length || splitPages.length} split pages to uploads folder!`);
+        console.log('Grouped PDFs exported successfully:', result.exportedFiles);
+        const groupCount = groupsToExport.length;
+        const totalPages = groupsToExport.reduce((sum, group) => sum + group.length, 0);
+        alert(`Successfully exported ${groupCount} groups (${totalPages} total pages) to uploads folder!`);
       } else {
-        console.error('Failed to export split PDFs:', result.message);
-        alert(`Failed to export split PDFs: ${result.message}`);
+        console.error('Failed to export grouped PDFs:', result.message);
+        alert(`Failed to export grouped PDFs: ${result.message}`);
       }
     } catch (error) {
-      console.error('Error exporting split PDFs:', error);
-      alert('An error occurred while exporting split PDFs');
+      console.error('Error exporting grouped PDFs:', error);
+      alert('An error occurred while exporting grouped PDFs');
     } finally {
       setIsExporting(false);
     }
@@ -319,7 +444,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                 {isManualSplitMode 
                   ? `Click between pages to mark split points. Current splits: ${manualSplitPoints.length}` 
                   : isSplitMode 
-                    ? `Viewing ${splitPages.length} individual page files` 
+                    ? `Viewing ${splitPages.length} individual page files${pageGroups.length > 0 ? ` • ${pageGroups.length} groups` : ''}` 
                     : 'Preview all pages from uploaded PDF files'
                 }
               </p>
@@ -464,9 +589,13 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                       <Badge variant="secondary" className="text-xs px-1 py-0.5">{page.pageNumber}</Badge>
                     </div>
                     
-                    {/* Vertical dashed separator for split mode */}
+                    {/* Vertical dashed separator for split mode - clickable for grouping */}
                     {isSplitMode && index < arr.length - 1 && (
-                      <div className="absolute -right-1 top-0 bottom-0 w-0.5 bg-gradient-to-b from-transparent via-green-500/60 to-transparent border-r border-dashed border-green-500/60" />
+                      <div 
+                        className="absolute -right-1 top-0 bottom-0 w-1 bg-gradient-to-b from-transparent via-green-500/60 to-transparent border-r border-dashed border-green-500/60 cursor-pointer hover:bg-green-400/80 transition-colors duration-200 z-10"
+                        onClick={() => handlePageGrouping(page.pageNumber)}
+                        title="Click to group/ungroup pages"
+                      />
                     )}
                   </div>
                   
@@ -500,6 +629,29 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                 </div>
               ))}
             </div>
+            
+            {/* Show current page grouping status */}
+            {isSplitMode && pageGroups.length > 0 && (
+              <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Current Page Groups:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {pageGroups.map((group, groupIndex) => (
+                    <Badge 
+                      key={groupIndex} 
+                      variant="outline" 
+                      className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-600"
+                    >
+                      {group.length === 1 ? `Page ${group[0]}` : `Pages ${group[0]}-${group[group.length - 1]}`}
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                  💡 Click the green lines between pages to group/ungroup them
+                </p>
+              </div>
+            )}
           </>
         )}
 

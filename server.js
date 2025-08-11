@@ -1694,6 +1694,151 @@ app.post('/api/export-split-pdfs', async (req, res) => {
   }
 });
 
+// Export grouped PDFs to uploads folder
+app.post('/api/export-grouped-pdfs', async (req, res) => {
+  try {
+    console.log('Exporting grouped PDFs to uploads folder...');
+    
+    const { pageGroups } = req.body;
+    
+    if (!pageGroups || !Array.isArray(pageGroups)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid page groups data'
+      });
+    }
+    
+    const splitDir = path.join(__dirname, 'split_pages');
+    if (!fs.existsSync(splitDir)) {
+      return res.status(400).json({
+        success: false,
+        message: 'No split pages found. Please split PDFs first.'
+      });
+    }
+    
+    // Clear uploads folder (except .gitkeep)
+    const uploadFiles = fs.readdirSync(uploadsDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'));
+    
+    for (const file of uploadFiles) {
+      const filePath = path.join(uploadsDir, file);
+      if (fs.statSync(filePath).isFile()) {
+        fs.unlinkSync(filePath);
+        console.log(`Removed file: ${file}`);
+      }
+    }
+    
+    const exportedFiles = [];
+    
+    // Get the actual split files to determine the filename pattern
+    const splitFiles = fs.readdirSync(splitDir)
+      .filter(file => file !== '.gitkeep' && !file.startsWith('.'))
+      .filter(file => file.toLowerCase().endsWith('.pdf'));
+    
+    if (splitFiles.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No split PDF files found to export'
+      });
+    }
+    
+    // Extract filename pattern from the first file
+    const firstFile = splitFiles[0];
+    const filenameMatch = firstFile.match(/^(.+)_page_(\d+)\.pdf$/);
+    if (!filenameMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid filename format for split pages'
+      });
+    }
+    
+    const baseFilename = filenameMatch[1];
+    
+    // Process each group
+    for (let groupIndex = 0; groupIndex < pageGroups.length; groupIndex++) {
+      const group = pageGroups[groupIndex];
+      
+      if (group.length === 1) {
+        // Single page - just move the file
+        const pageNumber = group[0];
+        const filename = `${baseFilename}_page_${pageNumber}.pdf`;
+        const sourcePath = path.join(splitDir, filename);
+        const destPath = path.join(uploadsDir, filename);
+        
+        if (fs.existsSync(sourcePath)) {
+          fs.renameSync(sourcePath, destPath);
+          exportedFiles.push(filename);
+          console.log(`Moved single page: ${filename}`);
+        }
+      } else {
+        // Multiple pages - merge them into one PDF
+        const groupFilename = `Group_${groupIndex + 1}_Pages_${group[0]}-${group[group.length - 1]}.pdf`;
+        const destPath = path.join(uploadsDir, groupFilename);
+        
+        try {
+          // Create a new PDF document
+          const mergedPdf = await PDFDocument.create();
+          
+          // Add each page from the group
+          for (const pageNumber of group) {
+            const filename = `${baseFilename}_page_${pageNumber}.pdf`;
+            const sourcePath = path.join(splitDir, filename);
+            
+            if (fs.existsSync(sourcePath)) {
+              const pdfBytes = fs.readFileSync(sourcePath);
+              const pdf = await PDFDocument.load(pdfBytes);
+              const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+              pages.forEach(page => mergedPdf.addPage(page));
+            }
+          }
+          
+          // Save the merged PDF
+          const mergedPdfBytes = await mergedPdf.save();
+          fs.writeFileSync(destPath, mergedPdfBytes);
+          
+          exportedFiles.push(groupFilename);
+          console.log(`Created merged PDF: ${groupFilename}`);
+          
+          // Remove the individual page files from split_pages
+          for (const pageNumber of group) {
+            const filename = `${baseFilename}_page_${pageNumber}.pdf`;
+            const sourcePath = path.join(splitDir, filename);
+            if (fs.existsSync(sourcePath)) {
+              fs.unlinkSync(sourcePath);
+            }
+          }
+        } catch (error) {
+          console.error(`Error merging group ${groupIndex + 1}:`, error);
+          continue;
+        }
+      }
+    }
+    
+    if (exportedFiles.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to export any grouped PDFs'
+      });
+    }
+    
+    console.log(`Successfully exported ${exportedFiles.length} grouped PDFs to uploads folder`);
+    
+    res.json({
+      success: true,
+      message: `Successfully exported ${exportedFiles.length} grouped PDFs to uploads folder`,
+      exportedFiles: exportedFiles
+    });
+    
+  } catch (error) {
+    console.error('Error exporting grouped PDFs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to export grouped PDFs',
+      error: error.message
+    });
+  }
+});
+
 // Clear all folders endpoint
 app.post('/api/clear-all-folders', (req, res) => {
   try {

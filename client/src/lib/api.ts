@@ -502,6 +502,33 @@ export const api = {
     }
   },
 
+  // Export grouped PDFs to uploads folder
+  async exportGroupedPDFs(pageGroups: number[][]): Promise<{ success: boolean; message?: string; exportedFiles?: string[] }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/export-grouped-pdfs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pageGroups }),
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to export grouped PDFs');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Export grouped PDFs error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to export grouped PDFs'
+      };
+    }
+  },
+
   // Split PDF pages into individual files
   async splitPDFPages(): Promise<{ success: boolean; message?: string; splitFiles?: string[] }> {
     try {
