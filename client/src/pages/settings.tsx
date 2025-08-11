@@ -22,8 +22,8 @@ export default function Settings() {
   const { theme, setTheme } = useTheme();
   const [settings, setSettings] = useState({
     // User Settings
-    name: "John Doe",
-    email: "john.doe@company.com",
+    name: "Raj Tandel",
+    email: "raj.tandel@company.com",
     role: "Administrator",
     
     // Notification Settings

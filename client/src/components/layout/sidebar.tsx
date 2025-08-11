@@ -51,10 +51,10 @@ export default function Sidebar() {
       <div className="p-6 border-t border-border">
         <div className="flex items-center space-x-3 p-3 rounded-xl bg-muted/30">
           <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center shadow-sm">
-            <span className="text-primary text-sm font-semibold">JD</span>
+            <span className="text-primary text-sm font-semibold">RT</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-foreground">John Doe</p>
+            <p className="text-sm font-medium text-foreground">Raj Tandel</p>
             <p className="text-xs text-muted-foreground">Administrator</p>
           </div>
         </div>
