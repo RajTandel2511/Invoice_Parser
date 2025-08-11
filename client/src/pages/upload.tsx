@@ -781,13 +781,13 @@ export default function Upload() {
   const pollForProcessingCompletion = async () => {
     const checkCompletion = async () => {
       try {
-        console.log('Checking raw PDFs folder status...');
-        const result = await api.checkRawPdfs();
-        console.log('Raw PDFs check result:', result);
+        console.log('Checking processing completion status...');
+        const result = await api.checkProcessingStatus();
+        console.log('Processing status check result:', result);
         
-        if (result.success && result.isEmpty) {
-          // Raw PDFs folder is empty, processing is complete
-          console.log('Raw PDFs folder is empty - processing completed successfully');
+        if (result.success && result.isProcessingComplete) {
+          // Processing is complete
+          console.log('Processing completed successfully - completion flag found');
           setProcessingComplete(true);
           setIsProcessing(false); // Stop the loading animation
           setIsPostApprovalProcessing(false); // Reset post-approval processing state
@@ -795,14 +795,14 @@ export default function Upload() {
           return true; // Stop polling
         }
         
-        // Log current file count for debugging
+        // Log current status for debugging
         if (result.success) {
-          console.log(`Raw PDFs folder has ${result.fileCount} files remaining`);
+          console.log(`Processing still running: ${result.isStillRunning}`);
         }
         
         return false; // Continue polling
       } catch (error) {
-        console.error('Error checking raw PDFs folder:', error);
+        console.error('Error checking processing status:', error);
         return false;
       }
     };
