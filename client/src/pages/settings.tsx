@@ -23,7 +23,7 @@ export default function Settings() {
   const [settings, setSettings] = useState({
     // User Settings
     name: "Raj Tandel",
-    email: "raj.tandel@company.com",
+    email: "raj@allairmechanical.com",
     role: "Administrator",
     
     // Notification Settings
