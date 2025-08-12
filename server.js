@@ -1803,9 +1803,13 @@ app.post('/api/clear-all-folders', (req, res) => {
       }
     });
     
+    // Clear the extractedInvoices array to match the cleared folder
+    extractedInvoices = [];
+    console.log('Cleared extractedInvoices array to match cleared email_attachments folder');
+    
     res.json({
       success: true,
-      message: `Successfully cleared email attachments folder`,
+      message: `Successfully cleared email attachments folder and extracted invoices display`,
       clearedFolders
     });
   } catch (error) {
@@ -1983,31 +1987,40 @@ class EmailMonitor {
           
           console.log('Connected to inbox, searching for emails...');
           
-          // Search for emails from raj2511tandel@gmail.com from last 24 hours (including seen emails)
+          // Search for emails from multiple authorized senders from last 24 hours (including seen emails)
           const yesterday = new Date();
           yesterday.setTime(yesterday.getTime() - 24 * 3600 * 1000);
           
-          console.log('Searching for emails since:', yesterday.toISOString());
-          console.log('Looking for emails FROM: raj2511tandel@gmail.com');
+          const authorizedSenders = [
+            'raj2511tandel@gmail.com',
+            'janene@allairmechanical.com',
+            'payal@allairmechanical.com',
+            'yogita@allairmechanical.com'
+          ];
           
-          // Remove UNSEEN filter to get all emails from the sender
-          this.imap.search([['SINCE', yesterday], ['FROM', 'raj2511tandel@gmail.com']], (err, results) => {
+          console.log('Searching for emails since:', yesterday.toISOString());
+          console.log('Looking for emails FROM authorized senders:', authorizedSenders);
+          
+          // Search for emails from any of the authorized senders
+          const searchCriteria = [['SINCE', yesterday], ['OR', ['FROM', 'raj2511tandel@gmail.com'], ['FROM', 'janene@allairmechanical.com'], ['FROM', 'payal@allairmechanical.com'], ['FROM', 'yogita@allairmechanical.com']]];
+          
+          this.imap.search(searchCriteria, (err, results) => {
             if (err) {
               console.error('Search error:', err);
               reject(err);
               return;
             }
             
-            console.log(`Search results: Found ${results.length} emails from raj2511tandel@gmail.com`);
+            console.log(`Search results: Found ${results.length} emails from authorized senders`);
             
             if (results.length === 0) {
-              console.log('No emails from raj2511tandel@gmail.com found in last 24 hours');
+              console.log('No emails from authorized senders found in last 24 hours');
               this.imap.end();
               resolve();
               return;
             }
             
-            console.log(`Processing ${results.length} emails from raj2511tandel@gmail.com`);
+            console.log(`Processing ${results.length} emails from authorized senders`);
             this.processEmails(results);
           });
         });
@@ -2337,9 +2350,9 @@ class EmailMonitor {
       console.log(`Email subject: ${parsed.subject}`);
       console.log(`Email from: ${parsed.from?.text}`);
       
-      // Always process attachments from raj2511tandel@gmail.com
+      // Always process attachments from authorized senders
       if (attachment && attachmentData) {
-        console.log(`Processing email from raj2511tandel@gmail.com: ${parsed.subject}`);
+        console.log(`Processing email from authorized sender (${parsed.from?.text}): ${parsed.subject}`);
         
         // Get attachment details
         const attachmentName = attachment.disposition?.params?.filename || `attachment_${Date.now()}`;
@@ -2800,6 +2813,10 @@ app.post('/api/move-email-attachments', async (req, res) => {
     }
     
     console.log(`Successfully moved ${movedFiles.length} email attachments to uploads`);
+    
+    // Clear the extractedInvoices array since files have been moved to uploads
+    extractedInvoices = [];
+    console.log('Cleared extractedInvoices array after moving files to uploads');
     
     res.json({
       success: true,

@@ -38,6 +38,17 @@ export default function ExtractedInvoicesDisplay() {
   const [selectedInvoice, setSelectedInvoice] = useState<ExtractedInvoice | null>(null);
   const { toast } = useToast();
 
+  // Function to get friendly name from email address
+  const getFriendlyName = (email: string): string => {
+    const emailMap: { [key: string]: string } = {
+      'raj2511tandel@gmail.com': 'Raj Tandel',
+      'janene@allairmechanical.com': 'Janene Borromeo',
+      'payal@allairmechanical.com': 'Payal Tandel',
+      'yogita@allairmechanical.com': 'Yogita Tandel'
+    };
+    return emailMap[email] || email;
+  };
+
   useEffect(() => {
     fetchInvoices();
     // Refresh every 30 seconds to get new invoices
@@ -70,9 +81,12 @@ export default function ExtractedInvoicesDisplay() {
         setInvoices([]);
         setSelectedInvoice(null);
         
+        // Refresh the display to ensure it's in sync with the server
+        fetchInvoices();
+        
         toast({
           title: "Email Attachments Cleared",
-          description: `Successfully cleared email_attachments folder and removed ${invoices.length} invoices from display`,
+          description: `Successfully cleared email_attachments folder and removed all extracted invoices from display`,
         });
       } else {
         toast({
@@ -119,6 +133,9 @@ export default function ExtractedInvoicesDisplay() {
         // Clear the extracted invoices display
         setInvoices([]);
         setSelectedInvoice(null);
+        
+        // Refresh the display to ensure it's in sync with the server
+        fetchInvoices();
         
         // Redirect to main page after a short delay
         setTimeout(() => {
@@ -210,7 +227,10 @@ export default function ExtractedInvoicesDisplay() {
             <Mail className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">No invoices extracted yet</p>
             <p className="text-sm text-muted-foreground mt-2">
-              Invoices sent FROM raj2511tandel@gmail.com TO fetcherinvoice@gmail.com will appear here automatically
+              Invoices sent FROM authorized senders TO fetcherinvoice@gmail.com will appear here automatically
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Authorized senders: Raj Tandel, Janene Borromeo, Payal Tandel, Yogita Tandel
             </p>
           </div>
         </CardContent>
@@ -225,7 +245,7 @@ export default function ExtractedInvoicesDisplay() {
         <div>
           <h2 className="text-2xl font-semibold">Extracted Invoices</h2>
           <p className="text-muted-foreground">
-            {invoices.length} invoice(s) extracted from emails sent by raj2511tandel@gmail.com to fetcherinvoice@gmail.com
+            {invoices.length} invoice(s) extracted from emails sent by authorized senders to fetcherinvoice@gmail.com
           </p>
         </div>
         <div className="flex gap-2">
@@ -285,7 +305,7 @@ export default function ExtractedInvoicesDisplay() {
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <User className="h-3 w-3" />
-                    <span className="truncate">{invoice.emailFrom}</span>
+                    <span className="truncate">{getFriendlyName(invoice.emailFrom)}</span>
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Calendar className="h-3 w-3" />
@@ -334,6 +354,7 @@ export default function ExtractedInvoicesDisplay() {
               <div>
                 <h3 className="text-lg font-semibold">{selectedInvoice.attachmentName}</h3>
                 <p className="text-sm text-muted-foreground">{selectedInvoice.emailSubject}</p>
+                <p className="text-xs text-muted-foreground">From: {getFriendlyName(selectedInvoice.emailFrom)}</p>
               </div>
               <Button
                 onClick={() => setSelectedInvoice(null)}

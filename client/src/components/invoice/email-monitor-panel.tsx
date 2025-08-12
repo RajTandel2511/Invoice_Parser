@@ -5,14 +5,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Mail, 
   Play, 
   Square, 
   Settings, 
   CheckCircle, 
-  AlertCircle,
   Eye,
   EyeOff,
   RefreshCw
@@ -378,41 +376,7 @@ export default function EmailMonitorPanel() {
         </CardContent>
       </Card>
 
-      {/* Information Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle>How It Works</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Alert>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              The email monitor automatically checks for new emails every 5 minutes and processes 
-              invoice attachments. Make sure to use an App Password for Gmail accounts with 2FA enabled.
-            </AlertDescription>
-          </Alert>
-          
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p><strong>Supported Email Providers:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>Gmail (recommended)</li>
-              <li>Outlook/Hotmail</li>
-              <li>Yahoo Mail</li>
-              <li>Custom IMAP servers</li>
-            </ul>
-          </div>
-          
-          <div className="space-y-2 text-sm text-muted-foreground">
-            <p><strong>What Gets Processed:</strong></p>
-            <ul className="list-disc list-inside space-y-1 ml-4">
-              <li>System connects to: <strong>fetcherinvoice@gmail.com</strong></li>
-              <li>Only processes emails FROM: <strong>raj2511tandel@gmail.com</strong></li>
-              <li>All PDF and image attachments are automatically extracted</li>
-              <li>Files displayed directly on this page (no saving to uploads)</li>
-            </ul>
-          </div>
-        </CardContent>
-      </Card>
+
     </div>
   );
 }

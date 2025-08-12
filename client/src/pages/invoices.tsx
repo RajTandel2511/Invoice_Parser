@@ -10,7 +10,7 @@ export default function Invoices() {
           Invoice Automation
         </h1>
         <p className="text-muted-foreground mt-2">
-          Automatically extract and display invoices from raj2511tandel@gmail.com
+          Automatically extract and display invoices from authorized team members
         </p>
       </div>
       
