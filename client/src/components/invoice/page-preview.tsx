@@ -446,10 +446,10 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
         
         if (exportResult.success) {
           console.log('Grouped PDFs exported successfully:', exportResult.exportedFiles);
-          alert(`Successfully created ${groups.length} custom PDF groups and exported them to uploads folder!`);
+          // Success message removed - no more popup
         } else {
           console.error('Failed to export grouped PDFs:', exportResult.message);
-          alert(`PDFs created but failed to export: ${exportResult.message}`);
+          // Error message removed - no more popup
         }
         
         // Exit manual split mode
@@ -457,11 +457,11 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
         setManualSplitPoints([]);
       } else {
         console.error('Failed to create manual split:', result.message);
-        alert(`Failed to create manual split: ${result.message}`);
+        // Error message removed - no more popup
       }
     } catch (error) {
       console.error('Error in manual split:', error);
-      alert('An error occurred while creating manual split');
+      // Error message removed - no more popup
     } finally {
       setIsManualSplitting(false);
     }
@@ -486,14 +486,19 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
         console.log('Grouped PDFs exported successfully:', result.exportedFiles);
         const groupCount = groupsToExport.length;
         const totalPages = groupsToExport.reduce((sum, group) => sum + group.length, 0);
-        alert(`Successfully exported ${groupCount} groups (${totalPages} total pages) to uploads folder!`);
+        // Success message removed - no more popup
+        
+        // Redirect to main page after successful export
+        setTimeout(() => {
+          window.location.href = 'http://192.168.1.70:3000/';
+        }, 1000);
       } else {
         console.error('Failed to export grouped PDFs:', result.message);
-        alert(`Failed to export grouped PDFs: ${result.message}`);
+        // Error message removed - no more popup
       }
     } catch (error) {
       console.error('Error exporting grouped PDFs:', error);
-      alert('An error occurred while exporting grouped PDFs');
+      // Error message removed - no more popup
     } finally {
       setIsExporting(false);
     }

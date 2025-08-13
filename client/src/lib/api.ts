@@ -649,5 +649,28 @@ export const api = {
         message: error instanceof Error ? error.message : 'Failed to move email attachments'
       };
     }
+  },
+
+  // Note: Emails are now automatically marked as read during processing
+  // This function is no longer needed
+
+  // Get processed emails status
+  async getProcessedEmailsStatus(): Promise<{ success: boolean; processedCount?: number; processedIds?: string[]; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/processed-emails-status`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get processed emails status');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Get processed emails status error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get processed emails status'
+      };
+    }
   }
 }; 

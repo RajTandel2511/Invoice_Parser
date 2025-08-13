@@ -13,7 +13,8 @@ import {
   CheckCircle, 
   Eye,
   EyeOff,
-  RefreshCw
+  RefreshCw,
+  Save
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -48,6 +49,7 @@ export default function EmailMonitorPanel() {
   const { toast } = useToast();
 
   useEffect(() => {
+    loadConfiguration();
     checkStatus();
     // Check status every 30 seconds
     const interval = setInterval(checkStatus, 30000);
@@ -185,6 +187,66 @@ export default function EmailMonitorPanel() {
     }
   };
 
+  const saveConfiguration = async () => {
+    if (!config.email || !config.password) {
+      toast({
+        title: "Configuration Error",
+        description: "Please enter email and password",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/save-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+      
+      const data = await response.json();
+      
+      if (data.success) {
+        toast({
+          title: "Configuration Saved",
+          description: "Email configuration has been saved successfully!",
+        });
+      } else {
+        toast({
+          title: "Save Failed",
+          description: data.message || "Failed to save email configuration",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Save Error",
+        description: "Failed to save email configuration",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadConfiguration = async () => {
+    try {
+      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/get-config');
+      const data = await response.json();
+      if (data.success && data.config) {
+        setConfig(data.config);
+        console.log('Loaded saved email configuration');
+        toast({
+          title: "Configuration Loaded",
+          description: `Loaded saved configuration for ${data.config.email}`,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load configuration:', error);
+    }
+  };
+
   const checkEmailsNow = async () => {
     if (!config.email || !config.password) {
       toast({
@@ -300,6 +362,11 @@ export default function EmailMonitorPanel() {
           <CardTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
             Email Configuration
+            {config.password && (
+              <Badge variant="secondary" className="text-xs">
+                Configured
+              </Badge>
+            )}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -363,6 +430,14 @@ export default function EmailMonitorPanel() {
           </div>
           
           <div className="flex gap-2">
+            <Button
+              onClick={saveConfiguration}
+              disabled={isLoading || !config.email || !config.password}
+              className="flex items-center gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Save Configuration
+            </Button>
             <Button
               onClick={testConnection}
               disabled={isLoading || !config.email || !config.password}

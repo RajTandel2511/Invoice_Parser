@@ -1929,6 +1929,7 @@ class EmailMonitor {
     this.imap = new Imap(this.emailConfig);
     this.isMonitoring = false;
     this.checkInterval = null;
+    this.processedEmailIds = new Set(); // Track processed email IDs
   }
 
   start() {
@@ -1987,42 +1988,45 @@ class EmailMonitor {
           
           console.log('Connected to inbox, searching for emails...');
           
-          // Search for emails from multiple authorized senders from last 24 hours (including seen emails)
-          const yesterday = new Date();
-          yesterday.setTime(yesterday.getTime() - 24 * 3600 * 1000);
+          // Search for ALL unread emails from authorized email addresses (no time restriction)
+          // This makes sense because:
+          // 1. We only look for UNREAD emails (using ['UNSEEN'] filter)
+          // 2. After processing, emails are marked as read
+          // 3. So we'll never process the same email twice
+          // 4. No need for time restrictions - we can process old unread emails
+          console.log('Searching for ALL unread emails from authorized senders');
+          console.log('Looking for emails FROM: raj2511tandel@gmail.com, yogita@allairmechanical.com, payal@allairmechanical.com, janene@allairmechanical.com');
           
-          const authorizedSenders = [
-            'raj2511tandel@gmail.com',
-            'janene@allairmechanical.com',
-            'payal@allairmechanical.com',
-            'yogita@allairmechanical.com'
+          // Search for emails from each sender separately to avoid IMAP OR condition issues
+          const searchPromises = [
+            this.searchEmailsFromSender('raj2511tandel@gmail.com'),
+            this.searchEmailsFromSender('yogita@allairmechanical.com'),
+            this.searchEmailsFromSender('payal@allairmechanical.com'),
+            this.searchEmailsFromSender('janene@allairmechanical.com')
           ];
           
-          console.log('Searching for emails since:', yesterday.toISOString());
-          console.log('Looking for emails FROM authorized senders:', authorizedSenders);
-          
-          // Search for emails from any of the authorized senders
-          const searchCriteria = [['SINCE', yesterday], ['OR', ['FROM', 'raj2511tandel@gmail.com'], ['FROM', 'janene@allairmechanical.com'], ['FROM', 'payal@allairmechanical.com'], ['FROM', 'yogita@allairmechanical.com']]];
-          
-          this.imap.search(searchCriteria, (err, results) => {
-            if (err) {
-              console.error('Search error:', err);
-              reject(err);
-              return;
-            }
-            
-            console.log(`Search results: Found ${results.length} emails from authorized senders`);
-            
-            if (results.length === 0) {
-              console.log('No emails from authorized senders found in last 24 hours');
+          Promise.all(searchPromises)
+            .then(([emailsFromRaj, emailsFromYogita, emailsFromPayal, emailsFromJanene]) => {
+              // Combine and deduplicate email IDs
+              const allEmailIds = [...new Set([...emailsFromRaj, ...emailsFromYogita, ...emailsFromPayal, ...emailsFromJanene])];
+              
+              console.log(`Search results: Found ${emailsFromRaj.length} emails from Raj, ${emailsFromYogita.length} emails from Yogita, ${emailsFromPayal.length} emails from Payal, ${emailsFromJanene.length} emails from Janene, ${allEmailIds.length} total unique emails`);
+              
+              if (allEmailIds.length === 0) {
+                console.log('No unread emails from any authorized sender found');
+                this.imap.end();
+                resolve();
+                return;
+              }
+              
+              console.log(`Processing ${allEmailIds.length} emails from all authorized senders`);
+              this.processEmails(allEmailIds);
+            })
+            .catch((error) => {
+              console.error('Error searching emails:', error);
               this.imap.end();
-              resolve();
-              return;
-            }
-            
-            console.log(`Processing ${results.length} emails from authorized senders`);
-            this.processEmails(results);
-          });
+              reject(error);
+            });
         });
       });
 
@@ -2051,10 +2055,122 @@ class EmailMonitor {
     this.imap.openBox('INBOX', false, cb);
   }
 
+  // Search for emails from a specific sender (only unread emails, no time restriction)
+  searchEmailsFromSender(senderEmail) {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log(`Searching for ALL UNREAD emails from ${senderEmail} (no time restriction)`);
+        
+        // Search for unread emails from specific sender (no date restriction)
+        this.imap.search([['FROM', senderEmail], ['UNSEEN']], (err, results) => {
+          if (err) {
+            console.error(`Search error for ${senderEmail}:`, err);
+            reject(err);
+            return;
+          }
+          
+          console.log(`Found ${results.length} unread emails from ${senderEmail}`);
+          resolve(results || []);
+        });
+      } catch (error) {
+        console.error(`Error in searchEmailsFromSender for ${senderEmail}:`, error);
+        reject(error);
+      }
+    });
+  }
+
+  // Mark emails as read in Gmail
+  async markEmailsAsRead(emailIds) {
+    return new Promise((resolve, reject) => {
+      try {
+        if (!emailIds || emailIds.length === 0) {
+          console.log('No email IDs provided to mark as read');
+          resolve();
+          return;
+        }
+
+        console.log(`Marking ${emailIds.length} emails as read in Gmail...`);
+        
+        // Use IMAP STORE command to mark emails as read (remove \Seen flag)
+        this.imap.store(emailIds, '+FLAGS', ['\\Seen'], (err) => {
+          if (err) {
+            console.error('Error marking emails as read:', err);
+            reject(err);
+            return;
+          }
+          
+          console.log(`Successfully marked ${emailIds.length} emails as read in Gmail`);
+          resolve();
+        });
+      } catch (error) {
+        console.error('Error in markEmailsAsRead:', error);
+        reject(error);
+      }
+    });
+  }
+
+  // Get processed email IDs
+  getProcessedEmailIds() {
+    return Array.from(this.processedEmailIds);
+  }
+
+  // Clear processed email IDs (after marking as read)
+  clearProcessedEmailIds() {
+    this.processedEmailIds.clear();
+    console.log('Cleared processed email IDs');
+  }
+
+  // Check if an email has already been processed
+  isEmailProcessed(emailId) {
+    return this.processedEmailIds.has(emailId);
+  }
+
+  // Get count of processed emails
+  getProcessedEmailCount() {
+    return this.processedEmailIds.size;
+  }
+
   processEmails(emailIds) {
     let processedCount = 0;
+    let totalAttachments = 0;
+    let completedAttachments = 0;
     
     console.log(`Processing ${emailIds.length} emails...`);
+    
+    // Store email IDs for later marking as read
+    emailIds.forEach(id => this.processedEmailIds.add(id));
+    
+    // Track completion of all operations
+    const checkCompletion = () => {
+      if (processedCount === emailIds.length && completedAttachments === totalAttachments) {
+        console.log('All emails and attachments processed, marking as read before closing connection...');
+        
+        // Mark all processed emails as read before closing the connection
+        const processedIds = Array.from(this.processedEmailIds);
+        if (processedIds.length > 0) {
+          this.markEmailsAsRead(processedIds)
+            .then(() => {
+              console.log('Successfully marked all processed emails as read');
+              this.imap.end();
+            })
+            .catch((error) => {
+              console.error('Error marking emails as read:', error);
+              this.imap.end();
+            });
+        } else {
+          console.log('No emails to mark as read');
+          this.imap.end();
+        }
+      }
+    };
+
+    // Store completion tracking in instance variables for access by other methods
+    this.currentProcessing = {
+      processedCount: 0,
+      totalAttachments: 0,
+      completedAttachments: 0,
+      checkCompletion
+    };
     
     emailIds.forEach((id) => {
       console.log(`Fetching email ID: ${id}`);
@@ -2094,37 +2210,32 @@ class EmailMonitor {
             } else {
               console.log(`No structure found, processing as text only`);
               this.processEmailContent(buffer, headerBuffer, null, null, id);
+              
+              // Mark as completed since there are no attachments
+              if (this.currentProcessing) {
+                this.currentProcessing.completedAttachments++;
+                console.log(`No-attachment email completed. Progress: ${this.currentProcessing.completedAttachments}/${this.currentProcessing.totalAttachments}`);
+                this.currentProcessing.checkCompletion();
+              }
             }
           });
 
           msg.once('end', () => {
             console.log(`Message ${seqno} processing completed`);
-            processedCount++;
-            
-            if (processedCount === emailIds.length) {
-              console.log('All emails processed, ending IMAP connection');
-              this.imap.end();
-            }
+            this.currentProcessing.processedCount++;
+            this.currentProcessing.checkCompletion();
           });
         });
 
         fetch.once('error', (err) => {
           console.error(`Fetch error for email ID ${id}:`, err);
-          processedCount++;
-          
-          if (processedCount === emailIds.length) {
-            console.log('All emails processed (with errors), ending IMAP connection');
-            this.imap.end();
-          }
+          this.currentProcessing.processedCount++;
+          this.currentProcessing.checkCompletion();
         });
       } catch (error) {
         console.error(`Error setting up fetch for email ID ${id}:`, error);
-        processedCount++;
-        
-        if (processedCount === emailIds.length) {
-          console.log('All emails processed (with errors), ending IMAP connection');
-          this.imap.end();
-        }
+        this.currentProcessing.processedCount++;
+        this.currentProcessing.checkCompletion();
       }
     });
   }
@@ -2137,7 +2248,11 @@ class EmailMonitor {
       const attachments = this.findAttachments(struct);
       console.log(`Found ${attachments.length} attachments`);
       
-      if (attachments.length > 0) {
+      // Update total attachment count for this email
+      if (this.currentProcessing && attachments.length > 0) {
+        this.currentProcessing.totalAttachments += attachments.length;
+        console.log(`Updated total attachments: ${this.currentProcessing.totalAttachments}`);
+        
         // Process each attachment
         attachments.forEach((attachment, index) => {
           console.log(`Processing attachment ${index + 1}: ${attachment.subtype}`);
@@ -2146,6 +2261,13 @@ class EmailMonitor {
       } else {
         // No attachments, process as text only
         this.processEmailContent(emailText, headerBuffer, null, null, emailId);
+        
+        // Mark as completed since there are no attachments
+        if (this.currentProcessing) {
+          this.currentProcessing.completedAttachments++;
+          console.log(`No-attachment email completed. Progress: ${this.currentProcessing.completedAttachments}/${this.currentProcessing.totalAttachments}`);
+          this.currentProcessing.checkCompletion();
+        }
       }
     } catch (error) {
       console.error(`Error processing message structure:`, error);
@@ -2307,6 +2429,13 @@ class EmailMonitor {
               
               // Process the attachment
               this.processEmailContent(emailText, headerBuffer, attachment, attachmentData, emailId);
+              
+              // Mark attachment as completed
+              if (this.currentProcessing) {
+                this.currentProcessing.completedAttachments++;
+                console.log(`Attachment completed. Progress: ${this.currentProcessing.completedAttachments}/${this.currentProcessing.totalAttachments}`);
+                this.currentProcessing.checkCompletion();
+              }
             });
           }
         });
@@ -2320,11 +2449,25 @@ class EmailMonitor {
         console.error(`Error fetching attachment:`, err);
         // Process email without attachment
         this.processEmailContent(emailText, headerBuffer, null, null, emailId);
+        
+        // Mark as completed since attachment failed
+        if (this.currentProcessing) {
+          this.currentProcessing.completedAttachments++;
+          console.log(`Failed attachment marked as completed. Progress: ${this.currentProcessing.completedAttachments}/${this.currentProcessing.totalAttachments}`);
+          this.currentProcessing.checkCompletion();
+        }
       });
     } catch (error) {
       console.error(`Error setting up attachment fetch:`, error);
       // Process email without attachment
       this.processEmailContent(emailText, headerBuffer, null, null, emailId);
+      
+      // Mark as completed since attachment setup failed
+      if (this.currentProcessing) {
+        this.currentProcessing.completedAttachments++;
+        console.log(`Failed attachment setup marked as completed. Progress: ${this.currentProcessing.completedAttachments}/${this.currentProcessing.totalAttachments}`);
+        this.currentProcessing.checkCompletion();
+      }
     }
   }
 
@@ -2350,9 +2493,9 @@ class EmailMonitor {
       console.log(`Email subject: ${parsed.subject}`);
       console.log(`Email from: ${parsed.from?.text}`);
       
-      // Always process attachments from authorized senders
+      // Process attachments from both email addresses
       if (attachment && attachmentData) {
-        console.log(`Processing email from authorized sender (${parsed.from?.text}): ${parsed.subject}`);
+        console.log(`Processing email from ${parsed.from?.text || 'unknown sender'}: ${parsed.subject}`);
         
         // Get attachment details
         const attachmentName = attachment.disposition?.params?.filename || `attachment_${Date.now()}`;
@@ -2474,7 +2617,7 @@ class EmailMonitor {
         const invoiceData = {
           id: `email_${emailId}_${Date.now()}`,
           emailSubject: parsed.subject || 'No Subject',
-          emailFrom: parsed.from?.text || 'raj2511tandel@gmail.com',
+          emailFrom: parsed.from?.text || 'unknown@email.com',
           emailDate: parsed.date || new Date(),
           attachmentName: attachmentName,
           attachmentType: attachmentType,
@@ -2738,6 +2881,82 @@ app.post('/api/email-monitor/test-connection', async (req, res) => {
   }
 });
 
+// Save email configuration
+app.post('/api/email-monitor/save-config', async (req, res) => {
+  try {
+    const { email, password, host, port } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
+    
+    console.log('Saving email configuration for:', email);
+    
+    // Save configuration to environment variables or config file
+    // For now, we'll update the emailMonitor configuration
+    if (emailMonitor) {
+      emailMonitor.emailConfig = {
+        user: email,
+        password: password,
+        host: host || 'imap.gmail.com',
+        port: port || 993,
+        tls: true,
+        tlsOptions: { rejectUnauthorized: false }
+      };
+      
+      console.log('Email configuration updated successfully');
+    }
+    
+    res.json({
+      success: true,
+      message: 'Email configuration saved successfully'
+    });
+  } catch (error) {
+    console.error('Save config error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to save email configuration',
+      error: error.message
+    });
+  }
+});
+
+// Get saved email configuration
+app.get('/api/email-monitor/get-config', (req, res) => {
+  try {
+    if (!emailMonitor) {
+      return res.status(500).json({
+        success: false,
+        message: 'Email monitor not available'
+      });
+    }
+    
+    const config = {
+      email: emailMonitor.emailConfig.user,
+      password: emailMonitor.emailConfig.password,
+      host: emailMonitor.emailConfig.host,
+      port: emailMonitor.emailConfig.port.toString()
+    };
+    
+    console.log('Retrieved email configuration for:', config.email);
+    
+    res.json({
+      success: true,
+      config: config
+    });
+  } catch (error) {
+    console.error('Get config error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get email configuration',
+      error: error.message
+    });
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on:`);
   console.log(`  Local: http://localhost:${PORT}`);
@@ -2745,6 +2964,37 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`  Network: http://192.168.1.130:${PORT}`);
   console.log(`Uploads directory: ${uploadsDir}`);
 }); 
+
+// Get processed email status
+app.get('/api/processed-emails-status', async (req, res) => {
+  try {
+    if (!emailMonitor) {
+      return res.status(500).json({
+        success: false,
+        message: 'Email monitor not available'
+      });
+    }
+
+    const processedCount = emailMonitor.getProcessedEmailCount();
+    const processedIds = emailMonitor.getProcessedEmailIds();
+    
+    res.json({
+      success: true,
+      processedCount: processedCount,
+      processedIds: processedIds
+    });
+    
+  } catch (error) {
+    console.error('Error getting processed emails status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get processed emails status'
+    });
+  }
+});
+
+// Note: Emails are now automatically marked as read during processing
+// This endpoint is no longer needed
 
 // Move email attachments to uploads folder for processing
 app.post('/api/move-email-attachments', async (req, res) => {
@@ -2771,7 +3021,7 @@ app.post('/api/move-email-attachments', async (req, res) => {
     
     // Get all files in email_attachments folder
     const files = fs.readdirSync(emailAttachmentsDir)
-      .filter(file => !file.startsWith('.') && (file.endsWith('.pdf') || file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')));
+      .filter(file => !file.startsWith('.') && (file.endsWith('.pdf') || file.endsWith('.PDF') || file.endsWith('.png') || file.endsWith('.jpg') || file.endsWith('.jpeg')));
     
     console.log(`Found ${files.length} email attachments to move`);
     

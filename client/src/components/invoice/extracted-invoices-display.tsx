@@ -116,9 +116,7 @@ export default function ExtractedInvoicesDisplay() {
       return;
     }
 
-    if (!confirm(`Are you sure you want to transfer ${invoices.length} invoice(s) from email_attachments to uploads folder?`)) {
-      return;
-    }
+    // Confirmation dialog removed - export proceeds immediately
 
     setIsExporting(true);
     try {
@@ -129,6 +127,9 @@ export default function ExtractedInvoicesDisplay() {
           title: "Export Successful",
           description: `${result.totalFiles || invoices.length} invoice(s) transferred to uploads folder`,
         });
+        
+        // Emails are automatically marked as read during processing
+        console.log('Emails have been automatically marked as read in Gmail');
         
         // Clear the extracted invoices display
         setInvoices([]);
