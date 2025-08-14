@@ -557,6 +557,30 @@ export const api = {
     }
   },
 
+  // Merge PDF files
+  async mergePDFs(filePaths: string[]): Promise<Blob | null> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/merge-pdfs`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ filePaths }),
+      });
+
+      if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.message || 'Failed to merge PDFs');
+      }
+
+      // Return the merged PDF as a blob
+      return await response.blob();
+    } catch (error) {
+      console.error('Merge PDFs error:', error);
+      return null;
+    }
+  },
+
   // Split PDF pages into individual files
   async splitPDFPages(): Promise<{ success: boolean; message?: string; splitFiles?: string[] }> {
     try {

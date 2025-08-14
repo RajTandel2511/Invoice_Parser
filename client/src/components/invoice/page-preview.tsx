@@ -158,19 +158,26 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
-  const handlePreviewOriginalPDF = async () => {
+  const handlePreviewAllMerged = async () => {
     try {
       if (pdfFilesInfo.length === 0) return;
-      // For now, preview the first uploaded PDF (common case: a single combined PDF)
-      const targetFilename = pdfFilesInfo[0].filename;
-      const result = await api.getPDFFile(targetFilename);
-      if (result.success && result.blob) {
-        openBlobInNewTab(result.blob, targetFilename);
+      
+      // Convert full paths to relative paths that the server can use
+      const filePaths = pdfFilesInfo.map(f => {
+        // Extract just the filename from the full path
+        const filename = f.filename;
+        // Use the uploads directory path
+        return `uploads/${filename}`;
+      });
+      
+      const mergedBlob = await api.mergePDFs(filePaths);
+      if (mergedBlob) {
+        openBlobInNewTab(mergedBlob, 'merged.pdf');
       } else {
-        alert('Could not load the original PDF for preview.');
+        alert('Could not merge PDF files.');
       }
     } catch (error) {
-      console.error('Preview original PDF error:', error);
+      console.error('Preview all merged PDF error:', error);
       alert('Failed to open preview.');
     }
   };
@@ -561,7 +568,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={handlePreviewOriginalPDF}
+                  onClick={handlePreviewAllMerged}
                   className="h-8 px-3 text-xs bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700"
                 >
                   <Eye className="h-3 w-3 mr-1" /> Preview

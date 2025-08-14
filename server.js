@@ -3232,3 +3232,66 @@ app.get('/api/email-attachments', async (req, res) => {
 });
 
 // Check if approval is needed
+
+// Merge PDF files endpoint
+app.post('/api/merge-pdfs', async (req, res) => {
+  try {
+    const { filePaths } = req.body;
+    
+    if (!filePaths || !Array.isArray(filePaths) || filePaths.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No file paths provided for merging'
+      });
+    }
+
+    console.log('Merging PDF files:', filePaths);
+    
+    // Create a new PDF document
+    const mergedPdf = await PDFDocument.create();
+    
+    // Process each PDF file
+    for (const filePath of filePaths) {
+      try {
+        const fullPath = path.join(__dirname, filePath);
+        
+        if (!fs.existsSync(fullPath)) {
+          console.warn(`File not found: ${fullPath}`);
+          continue;
+        }
+        
+        const fileBuffer = fs.readFileSync(fullPath);
+        const pdf = await PDFDocument.load(fileBuffer);
+        
+        // Copy all pages from this PDF to the merged document
+        const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+        pages.forEach(page => mergedPdf.addPage(page));
+        
+        console.log(`Added pages from: ${filePath}`);
+      } catch (error) {
+        console.error(`Error processing file ${filePath}:`, error);
+        // Continue with other files even if one fails
+        continue;
+      }
+    }
+    
+    // Save the merged PDF
+    const mergedPdfBytes = await mergedPdf.save();
+    
+    // Set response headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="merged.pdf"');
+    res.setHeader('Content-Length', mergedPdfBytes.length);
+    
+    // Send the merged PDF
+    res.send(Buffer.from(mergedPdfBytes));
+    
+  } catch (error) {
+    console.error('Error merging PDFs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to merge PDF files',
+      error: error.message
+    });
+  }
+});
