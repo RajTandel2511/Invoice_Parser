@@ -744,5 +744,25 @@ export const api = {
         message: error instanceof Error ? error.message : 'Failed to get raw PDF files'
       };
     }
+  },
+
+  // Get preserved files from preview storage (for processed invoices preview)
+  async getPreservedPdfFiles(): Promise<{ success: boolean; files?: any[]; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/preserved-pdf-files`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get preserved PDF files');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Get preserved PDF files error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get preserved PDF files'
+      };
+    }
   }
 }; 

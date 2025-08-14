@@ -281,6 +281,51 @@ app.get('/api/raw-pdf-files', (req, res) => {
     const pdfFiles = allFiles.filter(file => file.toLowerCase().endsWith('.pdf'));
     console.log('PDF files found:', pdfFiles);
     
+    // Automatically copy files to preview storage when they're detected
+    if (pdfFiles.length > 0) {
+      const previewStoragePath = path.join(__dirname, 'process', 'data', 'preview_storage');
+      
+      // Create preview storage directory if it doesn't exist
+      if (!fs.existsSync(previewStoragePath)) {
+        fs.mkdirSync(previewStoragePath, { recursive: true });
+        console.log('Created preview storage directory:', previewStoragePath);
+      } else {
+        // Clear existing files from preview storage when new files are detected
+        console.log('New files detected in raw_pdfs, clearing old preview storage...');
+        try {
+          const existingFiles = fs.readdirSync(previewStoragePath);
+          existingFiles.forEach(file => {
+            const filePath = path.join(previewStoragePath, file);
+            if (fs.statSync(filePath).isFile()) {
+              fs.unlinkSync(filePath);
+              console.log(`Cleared old preview file: ${file}`);
+            }
+          });
+          console.log(`Cleared ${existingFiles.length} old files from preview storage`);
+        } catch (clearError) {
+          console.error('Error clearing preview storage:', clearError);
+        }
+      }
+      
+      // Copy each PDF file to preview storage (preserve them)
+      pdfFiles.forEach(filename => {
+        const sourcePath = path.join(rawPdfsPath, filename);
+        const destPath = path.join(previewStoragePath, filename);
+        
+        try {
+          // Only copy if destination doesn't exist or source is newer
+          if (!fs.existsSync(destPath) || fs.statSync(sourcePath).mtime > fs.statSync(destPath).mtime) {
+            fs.copyFileSync(sourcePath, destPath);
+            console.log(`Copied ${filename} to preview storage`);
+          }
+        } catch (copyError) {
+          console.error(`Error copying ${filename} to preview storage:`, copyError);
+        }
+      });
+      
+      console.log('Automatic file preservation completed');
+    }
+    
     const files = pdfFiles.map(filename => {
       const filePath = path.join(rawPdfsPath, filename);
       const stats = fs.statSync(filePath);
@@ -305,6 +350,55 @@ app.get('/api/raw-pdf-files', (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error reading raw PDF files',
+      error: error.message
+    });
+  }
+});
+
+// Get preserved files from preview storage for processed invoices
+app.get('/api/preserved-pdf-files', (req, res) => {
+  try {
+    const previewStoragePath = path.join(__dirname, 'process', 'data', 'preview_storage');
+    console.log('Preview storage directory path:', previewStoragePath);
+    
+    if (!fs.existsSync(previewStoragePath)) {
+      console.log('Preview storage directory does not exist');
+      return res.json({
+        success: true,
+        files: []
+      });
+    }
+
+    const allFiles = fs.readdirSync(previewStoragePath);
+    console.log('All files in preview storage:', allFiles);
+    
+    const pdfFiles = allFiles.filter(file => file.toLowerCase().endsWith('.pdf'));
+    console.log('Preserved PDF files found:', pdfFiles);
+    
+    const files = pdfFiles.map(filename => {
+      const filePath = path.join(previewStoragePath, filename);
+      const stats = fs.statSync(filePath);
+      console.log(`Preserved file: ${filename}, Size: ${stats.size}, Modified: ${stats.mtime}`);
+      return {
+        filename,
+        size: stats.size,
+        modifiedDate: stats.mtime,
+        path: filePath
+      };
+    });
+
+    console.log('Returning preserved files:', files);
+    
+    res.json({
+      success: true,
+      files: files
+    });
+
+  } catch (error) {
+    console.error('Error reading preserved PDF files:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error reading preserved PDF files',
       error: error.message
     });
   }
@@ -432,6 +526,47 @@ app.post('/api/process-invoices', async (req, res) => {
         message: 'Failed to move any files'
       });
     }
+
+    // Automatically preserve files for preview storage
+    console.log('Automatically preserving files for preview storage...');
+    const previewStoragePath = path.join(__dirname, 'process', 'data', 'preview_storage');
+    
+    // Create preview storage directory if it doesn't exist
+    if (!fs.existsSync(previewStoragePath)) {
+      fs.mkdirSync(previewStoragePath, { recursive: true });
+      console.log('Created preview storage directory:', previewStoragePath);
+    } else {
+      // Clear existing files from preview storage for new processing session
+      console.log('Clearing existing files from preview storage for new processing session...');
+      try {
+        const existingFiles = fs.readdirSync(previewStoragePath);
+        existingFiles.forEach(file => {
+          const filePath = path.join(previewStoragePath, file);
+          if (fs.statSync(filePath).isFile()) {
+            fs.unlinkSync(filePath);
+            console.log(`Cleared old file: ${file}`);
+          }
+        });
+        console.log(`Cleared ${existingFiles.length} old files from preview storage`);
+      } catch (clearError) {
+        console.error('Error clearing preview storage:', clearError);
+      }
+    }
+    
+    // Copy each moved file to preview storage (preserve them)
+    for (const file of movedFiles) {
+      const sourcePath = path.join(rawPdfsDir, file);
+      const destPath = path.join(previewStoragePath, file);
+      
+      try {
+        fs.copyFileSync(sourcePath, destPath);
+        console.log(`Preserved ${file} to preview storage`);
+      } catch (copyError) {
+        console.error(`Error preserving ${file} to preview storage:`, copyError);
+      }
+    }
+    
+    console.log('Automatic file preservation completed for processing session');
 
     // Execute Python script in background
     const pythonScriptPath = path.join(__dirname, 'process', 'notebooks', 'invoice_pipeline_combined.py');
@@ -3360,6 +3495,38 @@ app.post('/api/merge-pdfs', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to merge PDF files',
+      error: error.message
+    });
+  }
+});
+
+// PDF Preview endpoint - serve PDF files from preview storage
+app.get('/api/pdf-preview/:filename', (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const previewStoragePath = path.join(__dirname, 'process', 'data', 'preview_storage');
+    const filePath = path.join(previewStoragePath, filename);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({
+        success: false,
+        message: 'PDF file not found'
+      });
+    }
+    
+    // Set response headers for PDF display
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+    
+    // Stream the PDF file
+    const fileStream = fs.createReadStream(filePath);
+    fileStream.pipe(res);
+    
+  } catch (error) {
+    console.error('PDF preview error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error serving PDF file',
       error: error.message
     });
   }

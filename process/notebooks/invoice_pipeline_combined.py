@@ -1871,7 +1871,11 @@ def compute_shipping(row):
 
 df['Shipping_Charges'] = df.apply(compute_shipping, axis=1)
 
-df['Batch_Code'] = df['Invoice_Date'].astype(str)
+# Set batch code to today's date (when processing starts)
+from datetime import datetime
+today_date = datetime.now().strftime('%Y-%m-%d')
+df['Batch_Code'] = today_date
+
 df['Company_Code'] = 'AA1'
 
 # Ensure Job_Number column exists even if empty

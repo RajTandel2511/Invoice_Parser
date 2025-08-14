@@ -1,0 +1,5 @@
+[33m6bbe208[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m feat: enhance email automation with multiple authorized senders and improved UI
+[33m2796485[m  Fix Clear All Buttons and Add Extended Folder Clearing
+[33m7cd2dc5[m  Add Complete Email Automation System with PDF Preservation
+[33m8f0d604[m Fix PO approval dialog getting stuck by updating frontend to check processing_complete.flag instead of raw_pdfs folder
+[33m797bee8[m Add email automation system with invoice extraction and approval workflow - Add email monitoring panel and extracted invoices display - Implement email attachment processing from raj2511tandel@gmail.com - Add clear all folders functionality for email_attachments - Fix routing issues and API endpoint mismatches - Update approval logic with proper sequencing and data freshness checks

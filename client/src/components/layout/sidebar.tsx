@@ -1,9 +1,9 @@
-import { FileText, Upload, List, Link2, Settings, BarChart3 } from "lucide-react";
+import { FileText, Upload, Mail, Link2, Settings, BarChart3 } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 const navigationItems = [
   { icon: Upload, label: "Dashboard", href: "/" },
-  { icon: List, label: "Processed Invoices", href: "/invoices" },
+  { icon: Mail, label: "Email Automation", href: "/invoices" },
   { icon: Link2, label: "PO Matching", href: "/matching" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ];

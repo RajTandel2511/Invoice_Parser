@@ -2,14 +2,14 @@
   "approved": true,
   "approved_matches": [
     {
-      "TXT_File": "Captive Aire_1754943103394.txt",
-      "Vendor_Code": "CAPAIR",
-      "Vendor_Name": "Captive Aire",
-      "Vendor_Contact": "",
-      "Vendor_Address": "P.O. Box 60270  Charlotte, NC 28260",
-      "Address_Match_Score": "100",
-      "Matched_Contact": "",
-      "Matched_By": "address only"
+      "TXT_File": "127310 NSW_1755208409430.txt",
+      "Vendor_Code": "NORWRI",
+      "Vendor_Name": "Norman S. Wright Mech. Equip. LLC.",
+      "Vendor_Contact": "(415) 467-0900",
+      "Vendor_Address": "99A South Hill Dr.  Brisbane, CA 94005",
+      "Address_Match_Score": "96",
+      "Matched_Contact": "4154670900",
+      "Matched_By": "contact + address"
     }
   ]
 }

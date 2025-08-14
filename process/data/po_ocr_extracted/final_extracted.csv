@@ -1,3 +1,4 @@
 Seq,Part Number,Quantity,Unit Cost,Tax %,Extension,Distribution,Source File
-014,! AMOUNT SUBTOTAL,1.00,87615.2500,10.180,96534.92,,Purchase Order 1412 R1.txt
-015,! SHIPPING,1.00,2542.5000,,2542.50,,Purchase Order 1412 R1.txt
+029,! AMOUNT,1.00,192978.0000,9.8750,212034.58,,Purchase Order 1410.txt
+030,! STARTUP FOR DUST COLLECTOR,1.00,6375.0000,9.8750,7004.53,,Purchase Order 1410.txt
+031,! STARTUP FOR VFD,1.00,650.0000,9.8750,714.19,,Purchase Order 1410.txt
