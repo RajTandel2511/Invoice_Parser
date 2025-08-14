@@ -261,6 +261,55 @@ app.get('/api/check-processed-files', (req, res) => {
   }
 });
 
+// Get files from raw_pdfs directory
+app.get('/api/raw-pdf-files', (req, res) => {
+  try {
+    const rawPdfsPath = path.join(__dirname, 'process', 'data', 'raw_pdfs');
+    console.log('Raw PDFs directory path:', rawPdfsPath);
+    
+    if (!fs.existsSync(rawPdfsPath)) {
+      console.log('Raw PDFs directory does not exist');
+      return res.json({
+        success: true,
+        files: []
+      });
+    }
+
+    const allFiles = fs.readdirSync(rawPdfsPath);
+    console.log('All files in raw_pdfs directory:', allFiles);
+    
+    const pdfFiles = allFiles.filter(file => file.toLowerCase().endsWith('.pdf'));
+    console.log('PDF files found:', pdfFiles);
+    
+    const files = pdfFiles.map(filename => {
+      const filePath = path.join(rawPdfsPath, filename);
+      const stats = fs.statSync(filePath);
+      console.log(`File: ${filename}, Size: ${stats.size}, Modified: ${stats.mtime}`);
+      return {
+        filename,
+        size: stats.size,
+        modifiedDate: stats.mtime,
+        path: filePath
+      };
+    });
+
+    console.log('Returning files:', files);
+    
+    res.json({
+      success: true,
+      files: files
+    });
+
+  } catch (error) {
+    console.error('Error reading raw PDF files:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error reading raw PDF files',
+      error: error.message
+    });
+  }
+});
+
 // Get vendor matches endpoint
 app.get('/api/vendor-matches', async (req, res) => {
   try {
@@ -3246,14 +3295,18 @@ app.post('/api/merge-pdfs', async (req, res) => {
     }
 
     console.log('Merging PDF files:', filePaths);
+    console.log('Server root directory:', __dirname);
     
     // Create a new PDF document
     const mergedPdf = await PDFDocument.create();
+    let totalPagesAdded = 0;
     
     // Process each PDF file
     for (const filePath of filePaths) {
       try {
         const fullPath = path.join(__dirname, filePath);
+        console.log(`Processing file: ${filePath}`);
+        console.log(`Full path: ${fullPath}`);
         
         if (!fs.existsSync(fullPath)) {
           console.warn(`File not found: ${fullPath}`);
@@ -3261,13 +3314,18 @@ app.post('/api/merge-pdfs', async (req, res) => {
         }
         
         const fileBuffer = fs.readFileSync(fullPath);
+        console.log(`File size: ${fileBuffer.length} bytes`);
+        
         const pdf = await PDFDocument.load(fileBuffer);
+        const pageCount = pdf.getPageCount();
+        console.log(`PDF has ${pageCount} pages`);
         
         // Copy all pages from this PDF to the merged document
         const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
         pages.forEach(page => mergedPdf.addPage(page));
         
-        console.log(`Added pages from: ${filePath}`);
+        totalPagesAdded += pageCount;
+        console.log(`Added ${pageCount} pages from: ${filePath}`);
       } catch (error) {
         console.error(`Error processing file ${filePath}:`, error);
         // Continue with other files even if one fails
@@ -3275,8 +3333,19 @@ app.post('/api/merge-pdfs', async (req, res) => {
       }
     }
     
+    console.log(`Total pages added to merged PDF: ${totalPagesAdded}`);
+    
+    if (totalPagesAdded === 0) {
+      console.warn('No pages were added to the merged PDF');
+      return res.status(400).json({
+        success: false,
+        message: 'No PDF pages could be processed'
+      });
+    }
+    
     // Save the merged PDF
     const mergedPdfBytes = await mergedPdf.save();
+    console.log(`Merged PDF size: ${mergedPdfBytes.length} bytes`);
     
     // Set response headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');

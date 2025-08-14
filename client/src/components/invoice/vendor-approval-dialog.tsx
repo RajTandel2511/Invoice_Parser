@@ -13,8 +13,9 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Check, X, AlertCircle, CheckCircle, Building2 } from "lucide-react";
+import { Check, X, AlertCircle, CheckCircle, Building2, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { api } from "@/lib/api";
 
 interface VendorMatch {
   TXT_File?: string;
@@ -42,6 +43,7 @@ export default function VendorApprovalDialog({
 }: VendorApprovalDialogProps) {
   const [editedMatches, setEditedMatches] = useState<VendorMatch[]>([]);
   const [isApproving, setIsApproving] = useState(false);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const { toast } = useToast();
 
   // Debug logging
@@ -142,6 +144,71 @@ export default function VendorApprovalDialog({
     return <AlertCircle className="h-4 w-4 text-blue-600" />;
   };
 
+  const openBlobInNewTab = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if (win) {
+      // Prevent the new window from having access to the opener for security
+      win.opener = null;
+    }
+    // Revoke after some time to let the tab load fully
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
+  const handlePreviewAllFiles = async () => {
+    try {
+      setIsPreviewLoading(true);
+      
+      // Get files from raw_pdfs directory (where processed files are stored)
+      const result = await api.getRawPdfFiles();
+      
+      console.log('Raw PDF files result:', result);
+      
+      if (!result.success || !result.files || result.files.length === 0) {
+        toast({
+          title: "No Files Found",
+          description: "No processed files found to preview.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log('Files found:', result.files);
+      
+      // Convert full paths to relative paths that the server can use
+      const filePaths = result.files.map((f: any) => {
+        // Extract just the filename from the full path
+        const filename = f.filename || f.name || f;
+        // Use the process/data/raw_pdfs directory path (relative to server root)
+        return `process/data/raw_pdfs/${filename}`;
+      });
+      
+      console.log('File paths to merge:', filePaths);
+      
+      const mergedBlob = await api.mergePDFs(filePaths);
+      if (mergedBlob) {
+        console.log('Successfully merged PDF, opening in new tab');
+        openBlobInNewTab(mergedBlob, 'all_processed_files.pdf');
+      } else {
+        console.error('Failed to merge PDFs - no blob returned');
+        toast({
+          title: "Preview Failed",
+          description: "Could not merge PDF files for preview.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Preview all files error:', error);
+      toast({
+        title: "Preview Failed",
+        description: "Failed to open preview. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPreviewLoading(false);
+    }
+  };
+
   // Don't render anything if dialog is not open
   if (!isOpen) {
     return null;
@@ -169,6 +236,29 @@ export default function VendorApprovalDialog({
               Processing is paused. You must approve or cancel to continue.
             </span>
           </div>
+        </div>
+
+        {/* Preview Button */}
+        <div className="flex justify-end mb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handlePreviewAllFiles}
+            disabled={isPreviewLoading}
+            className="bg-blue-50 hover:bg-blue-100 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-700"
+          >
+            {isPreviewLoading ? (
+              <>
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 mr-2"></div>
+                Loading...
+              </>
+            ) : (
+              <>
+                <Eye className="h-3 w-3 mr-1" />
+                Preview All Files
+              </>
+            )}
+          </Button>
         </div>
 
         <div className="space-y-4">

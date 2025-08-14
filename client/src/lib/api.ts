@@ -724,5 +724,25 @@ export const api = {
         message: error instanceof Error ? error.message : 'Failed to get processed emails status'
       };
     }
+  },
+
+  // Get files from raw_pdfs directory (where processed files are stored)
+  async getRawPdfFiles(): Promise<{ success: boolean; files?: any[]; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/raw-pdf-files`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get raw PDF files');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Get raw PDF files error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get raw PDF files'
+      };
+    }
   }
 }; 
