@@ -477,10 +477,19 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
       // Use page groups if available, otherwise export individual pages
       const groupsToExport = pageGroups.length > 0 ? pageGroups : splitPages.map((_, index) => [index + 1]);
       
+      // Build filename-based groups to avoid cross-file mixups on the server
+      const fileGroups: string[][] = groupsToExport.map(group =>
+        group
+          .map(pageNum => splitPages[pageNum - 1])
+          .filter(p => !!p)
+          .map(p => p.filename)
+      );
+
       console.log('Exporting groups:', groupsToExport);
+      console.log('Exporting file groups:', fileGroups);
       
       // Use the new grouped export API
-      const result = await api.exportGroupedPDFs(groupsToExport);
+      const result = await api.exportGroupedPDFs(groupsToExport, fileGroups);
       
       if (result.success) {
         console.log('Grouped PDFs exported successfully:', result.exportedFiles);

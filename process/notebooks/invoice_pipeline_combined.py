@@ -751,10 +751,11 @@ def extract_po_from_image(base64_image, client, model="pixtral-12b-2409"):
                 "role": "user",
                 "content": [
                     {"type": "text", "text": (
-                        "Extract the Customer PO number from this invoice."
-                        "The PO number may be a short word or phrase (for e.g. 'SHOP', 'ELECTRIC WALL HTR') or a 4–5 digit number. "
+                        "Extract the Customer PO number from this invoice EXACTLY as it appears, preserving all formatting, punctuation, decimal points, spaces, and dashes. "
+                        "PO numbers can be: short phrases (e.g., 'SHOP', 'ELECTRIC WALL HTR'), numbers with decimals (e.g., '24.08', '22.82'), or plain numbers (e.g., '1234', '56789'). "
+                        "CRITICAL: Do NOT modify, combine, or change the format. If you see '24.08', return '24.08' NOT '2408'. "
                         "Ignore invoice numbers, order numbers, totals, and dates. "
-                        "Only return the PO number — do not guess or hallucinate. If not visible, return 'NOT FOUND'."
+                        "Only return the PO number exactly as written — do not guess, hallucinate, or reformat. If not visible, return 'NOT FOUND'."
                     )},
                     {"type": "image_url", "image_url": f"data:image/jpeg;base64,{base64_image}"}
                 ]
@@ -791,6 +792,12 @@ def clean_po_value(raw_text):
     if not raw_text:
         return ""
     text = raw_text.strip().upper()
+    
+    # Handle PO # pattern (with space) - extract just the number
+    po_hash_match = re.search(r"PO\s+#(\d+)", text, re.IGNORECASE)
+    if po_hash_match:
+        return po_hash_match.group(1)
+    
     # Updated cleaning logic (safe)
     text = re.sub(r"\bPO\s*NUMBER\s*[:\-]?\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\bCUSTOMER\s*PO\s*[:\-]?\s*", "", text, flags=re.IGNORECASE)
@@ -1014,8 +1021,13 @@ print("SUCCESS: Final file saved:", output_csv)
 print(f"INFO: Available columns: {available_columns}")
 df_po[available_columns].head()
 
-# Create PO approval flag
-po_approval_flag_file = "outputs/excel_files/po_approval_needed.flag"
+# Create PO approval flag with absolute path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+po_approval_flag_file = os.path.join(current_dir, "..", "outputs", "excel_files", "po_approval_needed.flag")
+
+# Ensure the directory exists
+os.makedirs(os.path.dirname(po_approval_flag_file), exist_ok=True)
+
 with open(po_approval_flag_file, 'w') as f:
     f.write("po_approval_needed")
 print("SUCCESS: Created PO approval flag:", po_approval_flag_file)
@@ -1023,22 +1035,36 @@ print("SUCCESS: Created PO approval flag:", po_approval_flag_file)
 def wait_for_po_approval():
     """Wait for user PO approval before continuing"""
     print("SUCCESS: PO matches created. Waiting for user approval...")
+    print(f"SUCCESS: Approval flag path: {po_approval_flag_file}")
     
     # Create PO approval flag
     with open(po_approval_flag_file, 'w') as f:
         f.write("po_approval_needed")
     
-    # Wait for approval
+    # Wait for approval with timeout and better error handling
+    max_wait_time = 3600  # 1 hour timeout
+    start_time = time.time()
+    
     while True:
         try:
+            current_time = time.time()
+            if current_time - start_time > max_wait_time:
+                print("ERROR: Timeout waiting for PO approval (1 hour). Continuing anyway...")
+                return True
+            
             if not os.path.exists(po_approval_flag_file):
                 print("SUCCESS: PO approval received. Continuing with processing...")
                 return True
             
+            # Print progress every 30 seconds
+            elapsed = int(current_time - start_time)
+            if elapsed % 30 == 0:
+                print(f"INFO: Still waiting for PO approval... ({elapsed} seconds elapsed)")
+            
             time.sleep(1)  # Check every second
             
         except Exception as e:
-            print(f"Error checking PO approval status: {e}")
+            print(f"ERROR: Error checking PO approval status: {e}")
             time.sleep(1)
 
 # Wait for PO approval
@@ -1845,8 +1871,8 @@ def compute_shipping(row):
 
 df['Shipping_Charges'] = df.apply(compute_shipping, axis=1)
 
-df['Batch_Code'] = 'testraj'
-df['Company_Code'] = 'TST'
+df['Batch_Code'] = df['Invoice_Date'].astype(str)
+df['Company_Code'] = 'AA1'
 
 # Ensure Job_Number column exists even if empty
 if 'Job_Number' not in df.columns:
@@ -2008,7 +2034,7 @@ for _, inv_row in invoice_df.iterrows():
 
     # Header Line
     header = [
-        "H", po_number, "testraj", invoice_number, invoice_date, gl_date,
+        "H", po_number, invoice_date, invoice_number, invoice_date, gl_date,
         f"{total_amount:.2f}", "", "", "", "", "", "", routing_code, "", f"{tax_amount:.2f}"
     ]
     output_rows.append(header)

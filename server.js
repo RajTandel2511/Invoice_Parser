@@ -1048,15 +1048,34 @@ app.post('/api/approve-po-matches', async (req, res) => {
     const poApprovalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'po_approval_needed.flag');
     const lastPOContentHashPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'last_po_content_hash.txt');
     
+    console.log('Attempting to remove PO approval flag from:', poApprovalFlagPath);
+    
     if (fs.existsSync(poApprovalFlagPath)) {
-      fs.unlinkSync(poApprovalFlagPath);
-      console.log('Removed PO approval flag');
+      try {
+        fs.unlinkSync(poApprovalFlagPath);
+        console.log('SUCCESS: Removed PO approval flag');
+      } catch (error) {
+        console.error('ERROR: Failed to remove PO approval flag:', error);
+        // Try to write an empty file instead
+        try {
+          fs.writeFileSync(poApprovalFlagPath, '');
+          console.log('WARNING: Could not remove flag, wrote empty content instead');
+        } catch (writeError) {
+          console.error('ERROR: Could not write empty content to flag file:', writeError);
+        }
+      }
+    } else {
+      console.log('WARNING: PO approval flag file not found at:', poApprovalFlagPath);
     }
     
     // Clear the content hash to allow fresh data for next processing
     if (fs.existsSync(lastPOContentHashPath)) {
-      fs.unlinkSync(lastPOContentHashPath);
-      console.log('Cleared PO content hash file');
+      try {
+        fs.unlinkSync(lastPOContentHashPath);
+        console.log('SUCCESS: Cleared PO content hash file');
+      } catch (error) {
+        console.error('ERROR: Failed to clear PO content hash file:', error);
+      }
     }
     
     res.json({
@@ -1068,6 +1087,55 @@ app.post('/api/approve-po-matches', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to approve PO matches'
+    });
+  }
+});
+
+// Manual escape endpoint to remove PO approval flag if stuck
+app.post('/api/force-remove-po-flag', async (req, res) => {
+  try {
+    console.log('Force removing PO approval flag...');
+    
+    const poApprovalFlagPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'po_approval_needed.flag');
+    
+    if (fs.existsSync(poApprovalFlagPath)) {
+      try {
+        fs.unlinkSync(poApprovalFlagPath);
+        console.log('SUCCESS: Force removed PO approval flag');
+        res.json({
+          success: true,
+          message: 'PO approval flag force removed successfully'
+        });
+      } catch (error) {
+        console.error('ERROR: Failed to force remove PO approval flag:', error);
+        // Try to write empty content
+        try {
+          fs.writeFileSync(poApprovalFlagPath, '');
+          console.log('WARNING: Could not remove flag, wrote empty content instead');
+          res.json({
+            success: true,
+            message: 'PO approval flag content cleared (could not remove file)'
+          });
+        } catch (writeError) {
+          console.error('ERROR: Could not write empty content to flag file:', writeError);
+          res.status(500).json({
+            success: false,
+            message: 'Failed to remove or clear PO approval flag'
+          });
+        }
+      }
+    } else {
+      console.log('PO approval flag not found, nothing to remove');
+      res.json({
+        success: true,
+        message: 'PO approval flag not found, nothing to remove'
+      });
+    }
+  } catch (error) {
+    console.error('Error in force remove PO flag:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to force remove PO approval flag'
     });
   }
 });
@@ -1632,16 +1700,9 @@ app.post('/api/export-split-pdfs', async (req, res) => {
 app.post('/api/export-grouped-pdfs', async (req, res) => {
   try {
     console.log('Exporting grouped PDFs to uploads folder...');
-    
-    const { pageGroups } = req.body;
-    
-    if (!pageGroups || !Array.isArray(pageGroups)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid page groups data'
-      });
-    }
-    
+
+    const { pageGroups, fileGroups } = req.body;
+
     const splitDir = path.join(__dirname, 'split_pages');
     if (!fs.existsSync(splitDir)) {
       return res.status(400).json({
@@ -1649,8 +1710,8 @@ app.post('/api/export-grouped-pdfs', async (req, res) => {
         message: 'No split pages found. Please split PDFs first.'
       });
     }
-    
-    // Clear uploads folder (except .gitkeep)
+
+    // Clear uploads folder (except .gitkeep) before exporting new grouped files
     const uploadFiles = fs.readdirSync(uploadsDir)
       .filter(file => file !== '.gitkeep' && !file.startsWith('.'));
     
@@ -1663,20 +1724,86 @@ app.post('/api/export-grouped-pdfs', async (req, res) => {
     }
     
     const exportedFiles = [];
-    
-    // Get the actual split files to determine the filename pattern
+
+    // If fileGroups provided, prefer robust filename-based processing
+    if (fileGroups && Array.isArray(fileGroups)) {
+      for (let groupIndex = 0; groupIndex < fileGroups.length; groupIndex++) {
+        const group = fileGroups[groupIndex];
+        if (!Array.isArray(group) || group.length === 0) continue;
+
+        if (group.length === 1) {
+          const filename = group[0];
+          const sourcePath = path.join(splitDir, filename);
+          const destPath = path.join(uploadsDir, filename);
+
+          if (fs.existsSync(sourcePath)) {
+            // Copy instead of move to preserve split pages
+            fs.copyFileSync(sourcePath, destPath);
+            exportedFiles.push(path.basename(destPath));
+            console.log(`Copied single page: ${filename}`);
+          }
+        } else {
+          // Merge multiple files in the provided order
+          const firstBase = path.basename(group[0], '.pdf');
+          const groupFilename = `Group_${groupIndex + 1}_${firstBase}.pdf`;
+          const destPath = path.join(uploadsDir, groupFilename);
+
+          try {
+            const mergedPdf = await PDFDocument.create();
+            for (const filename of group) {
+              const sourcePath = path.join(splitDir, filename);
+              if (fs.existsSync(sourcePath)) {
+                const pdfBytes = fs.readFileSync(sourcePath);
+                const pdf = await PDFDocument.load(pdfBytes);
+                const pages = await mergedPdf.copyPages(pdf, pdf.getPageIndices());
+                pages.forEach(page => mergedPdf.addPage(page));
+              }
+            }
+            const mergedPdfBytes = await mergedPdf.save();
+            fs.writeFileSync(destPath, mergedPdfBytes);
+            exportedFiles.push(path.basename(destPath));
+            console.log(`Created merged PDF: ${groupFilename}`);
+          } catch (error) {
+            console.error(`Error merging filename-based group ${groupIndex + 1}:`, error);
+            continue;
+          }
+        }
+      }
+
+      if (exportedFiles.length === 0) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to export any grouped PDFs'
+        });
+      }
+
+      console.log(`Successfully exported ${exportedFiles.length} grouped PDFs to uploads folder`);
+      return res.json({
+        success: true,
+        message: `Successfully exported ${exportedFiles.length} grouped PDFs to uploads folder`,
+        exportedFiles
+      });
+    }
+
+    // Legacy support: pageGroups (uses first file's base name) - kept for backward compatibility
+    if (!pageGroups || !Array.isArray(pageGroups)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid grouping data'
+      });
+    }
+
     const splitFiles = fs.readdirSync(splitDir)
       .filter(file => file !== '.gitkeep' && !file.startsWith('.'))
       .filter(file => file.toLowerCase().endsWith('.pdf'));
-    
+
     if (splitFiles.length === 0) {
       return res.status(400).json({
         success: false,
         message: 'No split PDF files found to export'
       });
     }
-    
-    // Extract filename pattern from the first file
+
     const firstFile = splitFiles[0];
     const filenameMatch = firstFile.match(/^(.+)_page_(\d+)\.pdf$/);
     if (!filenameMatch) {
@@ -1685,39 +1812,31 @@ app.post('/api/export-grouped-pdfs', async (req, res) => {
         message: 'Invalid filename format for split pages'
       });
     }
-    
+
     const baseFilename = filenameMatch[1];
-    
-    // Process each group
+
     for (let groupIndex = 0; groupIndex < pageGroups.length; groupIndex++) {
       const group = pageGroups[groupIndex];
-      
+      if (!Array.isArray(group) || group.length === 0) continue;
+
       if (group.length === 1) {
-        // Single page - just move the file
         const pageNumber = group[0];
         const filename = `${baseFilename}_page_${pageNumber}.pdf`;
         const sourcePath = path.join(splitDir, filename);
         const destPath = path.join(uploadsDir, filename);
-        
         if (fs.existsSync(sourcePath)) {
-          fs.renameSync(sourcePath, destPath);
+          fs.copyFileSync(sourcePath, destPath);
           exportedFiles.push(filename);
-          console.log(`Moved single page: ${filename}`);
+          console.log(`Copied single page: ${filename}`);
         }
       } else {
-        // Multiple pages - merge them into one PDF
         const groupFilename = `Group_${groupIndex + 1}_Pages_${group[0]}-${group[group.length - 1]}.pdf`;
         const destPath = path.join(uploadsDir, groupFilename);
-        
         try {
-          // Create a new PDF document
           const mergedPdf = await PDFDocument.create();
-          
-          // Add each page from the group
           for (const pageNumber of group) {
             const filename = `${baseFilename}_page_${pageNumber}.pdf`;
             const sourcePath = path.join(splitDir, filename);
-            
             if (fs.existsSync(sourcePath)) {
               const pdfBytes = fs.readFileSync(sourcePath);
               const pdf = await PDFDocument.load(pdfBytes);
@@ -1725,44 +1844,31 @@ app.post('/api/export-grouped-pdfs', async (req, res) => {
               pages.forEach(page => mergedPdf.addPage(page));
             }
           }
-          
-          // Save the merged PDF
           const mergedPdfBytes = await mergedPdf.save();
           fs.writeFileSync(destPath, mergedPdfBytes);
-          
           exportedFiles.push(groupFilename);
           console.log(`Created merged PDF: ${groupFilename}`);
-          
-          // Remove the individual page files from split_pages
-          for (const pageNumber of group) {
-            const filename = `${baseFilename}_page_${pageNumber}.pdf`;
-            const sourcePath = path.join(splitDir, filename);
-            if (fs.existsSync(sourcePath)) {
-              fs.unlinkSync(sourcePath);
-            }
-          }
         } catch (error) {
           console.error(`Error merging group ${groupIndex + 1}:`, error);
           continue;
         }
       }
     }
-    
+
     if (exportedFiles.length === 0) {
       return res.status(500).json({
         success: false,
         message: 'Failed to export any grouped PDFs'
       });
     }
-    
+
     console.log(`Successfully exported ${exportedFiles.length} grouped PDFs to uploads folder`);
-    
     res.json({
       success: true,
       message: `Successfully exported ${exportedFiles.length} grouped PDFs to uploads folder`,
-      exportedFiles: exportedFiles
+      exportedFiles
     });
-    
+
   } catch (error) {
     console.error('Error exporting grouped PDFs:', error);
     res.status(500).json({

@@ -299,6 +299,34 @@ export const api = {
     }
   },
 
+  // Force remove PO approval flag if stuck
+  async forceRemovePOFlag(): Promise<{ success: boolean; message?: string }> {
+    try {
+      console.log('Force removing PO approval flag...');
+      
+      const response = await fetch(`${API_BASE_URL}/force-remove-po-flag`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to force remove PO approval flag');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Force remove PO flag error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to force remove PO approval flag'
+      };
+    }
+  },
+
   // Download AP invoices file
   async downloadAPInvoices(): Promise<{ success: boolean; message?: string }> {
     try {
@@ -502,15 +530,15 @@ export const api = {
     }
   },
 
-  // Export grouped PDFs to uploads folder
-  async exportGroupedPDFs(pageGroups: number[][]): Promise<{ success: boolean; message?: string; exportedFiles?: string[] }> {
+  // Export grouped PDFs to uploads folder (supports filename-based grouping for accuracy)
+  async exportGroupedPDFs(pageGroups: number[][], fileGroups?: string[][]): Promise<{ success: boolean; message?: string; exportedFiles?: string[] }> {
     try {
       const response = await fetch(`${API_BASE_URL}/export-grouped-pdfs`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pageGroups }),
+        body: JSON.stringify({ pageGroups, fileGroups }),
       });
 
       const result = await response.json();
