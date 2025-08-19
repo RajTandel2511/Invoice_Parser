@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { CloudUpload, FileText, Download, CheckCircle, Play, CheckCircle2, Search, Filter, Eye, Building2, Briefcase, MessageSquare, Hash, Tag, X } from 'lucide-react';
+import { CloudUpload, FileText, Download, CheckCircle, Play, CheckCircle2, Search, Filter, Eye, Building2, Briefcase, MessageSquare, Hash, Tag, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -80,6 +80,13 @@ interface InvoiceDetailModalProps {
   onClose: () => void;
   invoice: ProcessedInvoice | null;
   preservedPdfFiles: any[];
+  toast: any;
+  onNavigatePrev: () => void;
+  onNavigateNext: () => void;
+  hasPrev: boolean;
+  hasNext: boolean;
+  currentIndex: number;
+  totalInvoices: number;
 }
 
 // Find corresponding PDF file for an invoice
@@ -113,7 +120,7 @@ const openPDFPreview = (pdfFile: any) => {
   
   // Create a blob URL for the PDF file
   const pdfPath = pdfFile.path.replace(/\\/g, '/'); // Normalize path separators
-  const url = `http://192.168.1.70:3002/api/pdf-preview/${encodeURIComponent(pdfFile.filename)}`;
+  const url = `/api/pdf-preview/${encodeURIComponent(pdfFile.filename)}`;
   
   // Open in new tab
   const win = window.open(url, '_blank', 'noopener,noreferrer');
@@ -122,15 +129,61 @@ const openPDFPreview = (pdfFile: any) => {
   }
 };
 
-function InvoiceDetailModal({ isOpen, onClose, invoice, preservedPdfFiles }: InvoiceDetailModalProps) {
-  if (!invoice) return null;
+function InvoiceDetailModal({ isOpen, onClose, invoice, preservedPdfFiles, toast, onNavigatePrev, onNavigateNext, hasPrev, hasNext, currentIndex, totalInvoices }: InvoiceDetailModalProps) {
+  const defaultInvoice: ProcessedInvoice = {
+    id: '',
+    invoiceNumber: '',
+    vendorCode: '',
+    vendorName: '',
+    invoiceType: '',
+    poNumber: '',
+    jobNumber: '',
+    woNumber: '',
+    remarks: '',
+    invoiceDate: '',
+    invoiceAmount: '0',
+    taxAmount: '0',
+    shippingCharges: '0',
+    amountBeforeTaxes: '0',
+    distributionGLAccount: '',
+    phaseCode: '',
+    costType: ''
+  };
 
-  const [editableInvoice, setEditableInvoice] = useState<ProcessedInvoice>(invoice);
+  const [editableInvoice, setEditableInvoice] = useState<ProcessedInvoice>(invoice ?? defaultInvoice);
 
   // Update local state when invoice prop changes
   useEffect(() => {
-    setEditableInvoice(invoice);
+    setEditableInvoice(invoice ?? defaultInvoice);
   }, [invoice]);
+
+  // Ensure date input gets a valid yyyy-MM-dd value
+  const normalizeToISODate = (dateString?: string): string => {
+    if (!dateString) return '';
+    // Already ISO yyyy-MM-dd
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString;
+    // Handle MM/DD/YY or MM/DD/YYYY
+    const mdy = dateString.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+    if (mdy) {
+      let [_, m, d, y] = mdy;
+      if (y.length === 2) {
+        // Assume 20xx for two-digit years
+        y = `20${y}`;
+      }
+      const mm = m.padStart(2, '0');
+      const dd = d.padStart(2, '0');
+      return `${y}-${mm}-${dd}`;
+    }
+    // Fallback: try Date parse and format
+    const dt = new Date(dateString);
+    if (!isNaN(dt.getTime())) {
+      const yyyy = String(dt.getFullYear());
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    return '';
+  };
 
   const handleInvoiceUpdate = (field: keyof ProcessedInvoice, value: string) => {
     setEditableInvoice(prev => ({
@@ -139,11 +192,45 @@ function InvoiceDetailModal({ isOpen, onClose, invoice, preservedPdfFiles }: Inv
     }));
   };
 
-  const handleSaveInvoice = () => {
-    // Here you would typically save to your backend
-    console.log('Saving invoice:', editableInvoice);
-    // For now, just close the modal
-    onClose();
+  const handleSaveInvoice = async () => {
+    try {
+      console.log('Saving invoice:', editableInvoice);
+      
+      // Call the API to update the Excel file and execute Python script
+      const result = await api.updateInvoiceAndProcess(editableInvoice);
+      
+      if (result.success) {
+        // Show success message
+        toast({
+          title: "Success!",
+          description: "Invoice updated and processing completed successfully!",
+          duration: 5000,
+        });
+        
+        // Close the modal
+        onClose();
+        
+        // Refresh the preserved files to show updated data
+        // Note: fetchPreservedFiles is not in scope here, so we'll just close the modal
+        // The parent component will handle refreshing if needed
+      } else {
+        // Show error message
+        toast({
+          title: "Error",
+          description: result.message || "Failed to update invoice",
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('Error saving invoice:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while saving",
+        variant: "destructive",
+        duration: 5000,
+      });
+    }
   };
 
   const formatCurrency = (amount: string) => {
@@ -185,12 +272,41 @@ function InvoiceDetailModal({ isOpen, onClose, invoice, preservedPdfFiles }: Inv
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-none w-screen h-screen p-0 overflow-hidden">
         <DialogHeader className="px-6 py-4 border-b">
-          <DialogTitle className="text-xl font-semibold">
-            Invoice Details - {editableInvoice.invoiceNumber || 'N/A'}
-          </DialogTitle>
-          <DialogDescription>
-            Review and edit invoice information
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <DialogTitle className="text-xl font-semibold">
+                Invoice Details - {editableInvoice.invoiceNumber || 'N/A'}
+              </DialogTitle>
+              <DialogDescription>
+                Review and edit invoice information
+              </DialogDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onNavigatePrev}
+                disabled={!hasPrev}
+                className="h-8 w-8"
+                aria-label="Previous invoice"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground min-w-[72px] text-center">
+                {totalInvoices > 0 && currentIndex >= 0 ? `${currentIndex + 1} / ${totalInvoices}` : `- / -`}
+              </span>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={onNavigateNext}
+                disabled={!hasNext}
+                className="h-8 w-8"
+                aria-label="Next invoice"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </DialogHeader>
         
         <div className="flex h-full">
@@ -265,7 +381,7 @@ function InvoiceDetailModal({ isOpen, onClose, invoice, preservedPdfFiles }: Inv
                     <Input
                       id="invoiceDate"
                       type="date"
-                      value={editableInvoice.invoiceDate || ''}
+                      value={normalizeToISODate(editableInvoice.invoiceDate)}
                       onChange={(e) => handleInvoiceUpdate('invoiceDate', e.target.value)}
                       className="mt-1 h-8 text-sm"
                     />
@@ -562,19 +678,38 @@ export default function Upload() {
     queryKey: ['processed-invoices'],
     queryFn: async () => {
       console.log('Fetching invoices from backend...');
-      const response = await fetch('http://192.168.1.70:3002/api/invoices');
-      const data = await response.json();
-      console.log('API response:', data);
-      if (data.success) {
-        console.log(`Found ${data.invoices.length} invoices`);
-        return data.invoices as ProcessedInvoice[];
+      const result = await api.getProcessedInvoices();
+      if (result.success && result.invoices) {
+        console.log(`Found ${result.invoices.length} invoices`);
+        return result.invoices as ProcessedInvoice[];
       } else {
-        console.error('API returned error:', data.message);
+        console.error('API returned error:', result.message);
         return [];
       }
     },
     refetchInterval: 5000, // Refetch every 5 seconds
   });
+
+  // Compute navigation state for modal
+  const currentInvoiceIndex = selectedInvoice && processedInvoices
+    ? processedInvoices.findIndex((inv) => inv.id === selectedInvoice.id)
+    : -1;
+  const hasPrevInvoice = currentInvoiceIndex > 0;
+  const hasNextInvoice = processedInvoices && currentInvoiceIndex >= 0
+    ? currentInvoiceIndex < processedInvoices.length - 1
+    : false;
+  const navigatePrevInvoice = () => {
+    if (!processedInvoices || currentInvoiceIndex <= 0) return;
+    const prev = processedInvoices[currentInvoiceIndex - 1];
+    setSelectedInvoice(prev);
+    fetchPreservedFiles();
+  };
+  const navigateNextInvoice = () => {
+    if (!processedInvoices || currentInvoiceIndex < 0 || currentInvoiceIndex >= processedInvoices.length - 1) return;
+    const next = processedInvoices[currentInvoiceIndex + 1];
+    setSelectedInvoice(next);
+    fetchPreservedFiles();
+  };
 
   // Calculate summary statistics
   const totalInvoices = processedInvoices?.length || 0;
@@ -1326,12 +1461,19 @@ export default function Upload() {
       />
       
       {/* Invoice Detail Modal */}
-      <InvoiceDetailModal
-        isOpen={!!selectedInvoice}
-        onClose={() => setSelectedInvoice(null)}
-        invoice={selectedInvoice}
-        preservedPdfFiles={preservedPdfFiles}
-      />
+              <InvoiceDetailModal
+          isOpen={!!selectedInvoice}
+          onClose={() => setSelectedInvoice(null)}
+          invoice={selectedInvoice}
+          preservedPdfFiles={preservedPdfFiles}
+          toast={toast}
+          onNavigatePrev={navigatePrevInvoice}
+          onNavigateNext={navigateNextInvoice}
+          hasPrev={hasPrevInvoice}
+          hasNext={hasNextInvoice}
+          currentIndex={currentInvoiceIndex}
+          totalInvoices={processedInvoices?.length || 0}
+        />
 
       <div className="w-full px-6">
         <div className="mb-8 flex items-center justify-between">
