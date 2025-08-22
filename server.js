@@ -191,16 +191,16 @@ app.delete('/api/files/:filename', (req, res) => {
 // Download processed files endpoints
 app.get('/api/download/ap-invoices', (req, res) => {
   try {
-    const filePath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'APInvoicesImport1.xlsx');
+    const filePath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'APInvoicesImport1.txt');
     
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({
         success: false,
-        message: 'APInvoicesImport1.xlsx not found. Please process invoices first.'
+        message: 'APInvoicesImport1.txt not found. Please process invoices first.'
       });
     }
 
-    res.download(filePath, 'APInvoicesImport1.xlsx');
+    res.download(filePath, 'APInvoicesImport1.txt');
 
   } catch (error) {
     console.error('Download AP invoices error:', error);
@@ -238,7 +238,7 @@ app.get('/api/download/invoice-spectrum', (req, res) => {
 // Check if processed files exist
 app.get('/api/check-processed-files', (req, res) => {
   try {
-    const apInvoicesPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'APInvoicesImport1.xlsx');
+    const apInvoicesPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'APInvoicesImport1.txt');
     const spectrumPath = path.join(__dirname, 'process', 'outputs', 'excel_files', 'invoice_spectrum_format.txt');
     
     const apInvoicesExists = fs.existsSync(apInvoicesPath);
@@ -2220,6 +2220,7 @@ class EmailMonitor {
     this.isMonitoring = false;
     this.checkInterval = null;
     this.processedEmailIds = new Set(); // Track processed email IDs
+    this.lastCheck = null; // Track last email check time
   }
 
   start() {
@@ -2251,6 +2252,7 @@ class EmailMonitor {
 
   async checkForNewEmails() {
     try {
+      this.lastCheck = new Date().toISOString();
       await this.connectAndProcess();
     } catch (error) {
       console.error('Email monitoring error:', error);
@@ -3026,8 +3028,11 @@ app.get('/api/email-monitor/status', (req, res) => {
   try {
     res.json({
       success: true,
-      isMonitoring: emailMonitor.isMonitoring,
-      message: emailMonitor.isMonitoring ? 'Email monitoring is active' : 'Email monitoring is inactive'
+      status: {
+        isMonitoring: emailMonitor.isMonitoring,
+        message: emailMonitor.isMonitoring ? 'Email monitoring is active' : 'Email monitoring is inactive'
+      },
+      lastCheck: emailMonitor.lastCheck || new Date().toISOString()
     });
   } catch (error) {
     res.status(500).json({
@@ -3081,6 +3086,7 @@ app.get('/api/email-monitor/debug', (req, res) => {
 app.post('/api/email-monitor/check-now', (req, res) => {
   try {
     console.log('Manual email check triggered');
+    emailMonitor.lastCheck = new Date().toISOString();
     emailMonitor.checkForNewEmails();
     res.json({
       success: true,

@@ -1,4 +1,2 @@
 Seq,Part Number,Quantity,Unit Cost,Tax %,Extension,Distribution,Source File
-029,! AMOUNT,1.00,192978.0000,9.8750,212034.58,,Purchase Order 1410.txt
-030,! STARTUP FOR DUST COLLECTOR,1.00,6375.0000,9.8750,7004.53,,Purchase Order 1410.txt
-031,! STARTUP FOR VFD,1.00,650.0000,9.8750,714.19,,Purchase Order 1410.txt
+002,!AMOUNT,1.00,344.0000,9.8750,377.97,,Purchase Order 1504.txt

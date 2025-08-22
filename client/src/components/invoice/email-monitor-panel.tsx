@@ -30,6 +30,15 @@ interface MonitorStatus {
   message: string;
 }
 
+// Helper function to get the current API base URL
+const getApiBaseUrl = () => {
+  const currentHost = window.location.hostname;
+  if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+    return 'http://localhost:3002/api';
+  }
+  return `http://${currentHost}:3002/api`;
+};
+
 export default function EmailMonitorPanel() {
   const [config, setConfig] = useState<EmailConfig>({
     email: 'fetcherinvoice@gmail.com',
@@ -58,13 +67,14 @@ export default function EmailMonitorPanel() {
 
   const checkStatus = async () => {
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/status');
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/status`);
       const data = await response.json();
       if (data.success) {
-        setStatus(data);
+        setStatus(data.status);
+        setLastCheck(data.lastCheck);
       }
     } catch (error) {
-      console.error('Failed to check status:', error);
+      console.error('Error checking status:', error);
     }
   };
 
@@ -80,7 +90,7 @@ export default function EmailMonitorPanel() {
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/test-connection', {
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/test-connection`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -123,7 +133,7 @@ export default function EmailMonitorPanel() {
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/start', {
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/start`, {
         method: 'POST'
       });
       
@@ -157,7 +167,7 @@ export default function EmailMonitorPanel() {
   const stopMonitoring = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/stop', {
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/stop`, {
         method: 'POST'
       });
       
@@ -199,7 +209,7 @@ export default function EmailMonitorPanel() {
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/save-config', {
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/save-config`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -232,7 +242,7 @@ export default function EmailMonitorPanel() {
 
   const loadConfiguration = async () => {
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/get-config');
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/get-config`);
       const data = await response.json();
       if (data.success && data.config) {
         setConfig(data.config);
@@ -259,7 +269,7 @@ export default function EmailMonitorPanel() {
 
     setIsLoading(true);
     try {
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/check-now', {
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/check-now`, {
         method: 'POST'
       });
       

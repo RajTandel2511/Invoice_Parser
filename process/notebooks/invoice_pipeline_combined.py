@@ -1163,6 +1163,7 @@ import os
 import re
 import pandas as pd
 import fitz  # PyMuPDF
+from tqdm import tqdm
 
 pdf_folder = PROJECTS_PATH if PROJECTS_PATH else "data/network_fallback/"
 input_path = "outputs/excel_files/pixtral_po_results.csv"
@@ -1182,73 +1183,141 @@ df_po["PO_Number"] = df_po["PO_Number"].apply(clean_number)
 df_po["Job_Number"] = df_po["Job_Number"].apply(clean_number)
 df_po["WO_Number"] = df_po["WO_Number"].apply(clean_number)
 
-def extract_info(identifier, id_type, pdf_folder):
-    if pd.isna(identifier) or identifier == "":
-        return None, "", "", ""
+# Cache for PDF content to avoid re-processing the same files
+pdf_cache = {}
 
-    # Check if network path is accessible
+def extract_info_optimized(identifiers, id_types, pdf_folder):
+    """
+    Optimized function that processes all identifiers at once using PDF caching
+    """
     if not os.path.exists(pdf_folder):
         print(f"ERROR: Network path not accessible: {pdf_folder}")
-        return None, "", "", ""
-
-    pattern = re.compile(rf"{'Purchase Order' if id_type == 'po' else 'Job'}[:\s]*{re.escape(str(identifier))}", re.IGNORECASE)
-    ordered_by_pattern = re.compile(r"Ordered By:\s*(.+)", re.IGNORECASE)
-    distribution_pattern = re.compile(r"\d{4}\s+([EMS])\b")
-
-    try:
-        for pdf_file in os.listdir(pdf_folder):
-            if not pdf_file.lower().endswith(".pdf"):
-                continue
-            pdf_path = os.path.join(pdf_folder, pdf_file)
-            try:
-                doc = fitz.open(pdf_path)
-                ordered_by, distribution_code = "", ""
-                for page in doc:
-                    text = page.get_text()
-                    if pattern.search(text):
-                        if (m := ordered_by_pattern.search(text)):
-                            ordered_by = m.group(1).strip()
-                        if (d := distribution_pattern.findall(text)):
-                            distribution_code = d[0]
-                        return pdf_file, ordered_by, distribution_code
-            except Exception as e:
-                print(f"ERROR: Error reading {pdf_file}: {e}")
-                continue
-    except Exception as e:
-        print(f"ERROR: Error accessing network folder: {e}")
-        return None, "", "", ""
+        return {identifier: (None, "", "", "") for identifier in identifiers}
     
-    return None, "", "", ""
+    # Get all PDF files once
+    pdf_files = [f for f in os.listdir(pdf_folder) if f.lower().endswith('.pdf')]
+    print(f"INFO: Processing {len(pdf_files)} PDF files for {len(identifiers)} identifiers...")
+    
+    # Initialize results
+    results = {identifier: (None, "", "", "") for identifier in identifiers}
+    
+    # Process each PDF file once and cache the results
+    for pdf_file in tqdm(pdf_files, desc="Processing PDFs"):
+        pdf_path = os.path.join(pdf_folder, pdf_file)
+        
+        try:
+            # Check if PDF is already cached
+            if pdf_file in pdf_cache:
+                pdf_data = pdf_cache[pdf_file]
+            else:
+                # Process PDF and cache the result
+                doc = fitz.open(pdf_path)
+                pdf_text = ""
+                for page in doc:
+                    pdf_text += page.get_text()
+                doc.close()
+                
+                # Cache the extracted text
+                pdf_cache[pdf_file] = pdf_text
+            
+            pdf_text = pdf_cache[pdf_file]
+            
+            # Check all identifiers against this PDF
+            for identifier, id_type in zip(identifiers, id_types):
+                if results[identifier][0] is not None:
+                    continue  # Already found a match for this identifier
+                
+                # Create pattern for this identifier
+                pattern = re.compile(rf"{'Purchase Order' if id_type == 'po' else 'Job'}[:\s]*{re.escape(str(identifier))}", re.IGNORECASE)
+                
+                if pattern.search(pdf_text):
+                    # Extract ordered_by and distribution_code
+                    ordered_by_pattern = re.compile(r"Ordered By:\s*(.+)", re.IGNORECASE)
+                    distribution_pattern = re.compile(r"\d{4}\s+([EMS])\b")
+                    
+                    ordered_by = ""
+                    distribution_code = ""
+                    
+                    if (m := ordered_by_pattern.search(pdf_text)):
+                        ordered_by = m.group(1).strip()
+                    if (d := distribution_pattern.findall(pdf_text)):
+                        distribution_code = d[0]
+                    
+                    results[identifier] = (pdf_file, ordered_by, distribution_code)
+                    
+        except Exception as e:
+            print(f"ERROR: Error processing {pdf_file}: {e}")
+            continue
+    
+    return results
 
+# Get unique identifiers and their types
+po_identifiers = []
+job_identifiers = []
+po_types = []
+job_types = []
+
+for _, row in df_po.iterrows():
+    if pd.notna(row["PO_Number"]) and row["PO_Number"] != "":
+        po_identifiers.append(row["PO_Number"])
+        po_types.append("po")
+    
+    if pd.notna(row["Job_Number"]) and row["Job_Number"].strip() != "":
+        job_identifiers.append(row["Job_Number"])
+        job_types.append("job")
+
+# Process all identifiers at once
+print(f"INFO: Processing {len(po_identifiers)} PO numbers and {len(job_identifiers)} Job numbers...")
+
+all_identifiers = po_identifiers + job_identifiers
+all_types = po_types + job_types
+
+if all_identifiers:
+    results = extract_info_optimized(all_identifiers, all_types, pdf_folder)
+else:
+    results = {}
+
+# Create lookup dictionaries for fast access
+po_results = {po_id: results.get(po_id, (None, "", "", "")) for po_id in po_identifiers}
+job_results = {job_id: results.get(job_id, (None, "", "", "")) for job_id in job_identifiers}
+
+# Build the final arrays
 po_verified_by = []
 job_verified_by = []
 ordered_by_final = []
 distribution_code_final = []
 
 for _, row in df_po.iterrows():
-    match_found = False
-    file_found = ordered_by = dist_code = ""
-
+    po_verified = ""
+    job_verified = ""
+    ordered_by = ""
+    dist_code = ""
+    
+    # Check PO Number
     if pd.notna(row["PO_Number"]) and row["PO_Number"] != "":
-        result = extract_info(row["PO_Number"], "po", pdf_folder)
-        if result[0]:
-            po_verified_by.append(result[0])
-            job_verified_by.append("")
-            file_found, ordered_by, dist_code = result
-            match_found = True
-
-    elif pd.notna(row["Job_Number"]) and row["Job_Number"].strip() != "":
-        result = extract_info(row["Job_Number"], "job", pdf_folder)
-        if result[0]:
-            job_verified_by.append(result[0])
-            po_verified_by.append("")
-            file_found, ordered_by, dist_code = result
-            match_found = True
-
-    if not match_found:
-        po_verified_by.append("ERROR: Not Found")
-        job_verified_by.append("ERROR: Not Found")
-
+        if row["PO_Number"] in po_results:
+            result = po_results[row["PO_Number"]]
+            if result[0]:
+                po_verified = result[0]
+                ordered_by = result[1]
+                dist_code = result[2]
+    
+    # Check Job Number (only if PO not found)
+    if not po_verified and pd.notna(row["Job_Number"]) and row["Job_Number"].strip() != "":
+        if row["Job_Number"] in job_results:
+            result = job_results[row["Job_Number"]]
+            if result[0]:
+                job_verified = result[0]
+                ordered_by = result[1]
+                dist_code = result[2]
+    
+    # Set default values if nothing found
+    if not po_verified and not job_verified:
+        po_verified = "ERROR: Not Found"
+        job_verified = "ERROR: Not Found"
+    
+    po_verified_by.append(po_verified)
+    job_verified_by.append(job_verified)
     ordered_by_final.append(ordered_by)
     distribution_code_final.append(dist_code)
 
@@ -1257,9 +1326,15 @@ df_po["job_verified_by"] = job_verified_by
 df_po["ordered_by"] = ordered_by_final
 df_po["distribution_code"] = distribution_code_final
 
+# Clear the cache to free memory
+pdf_cache.clear()
+
+print("INFO: PDF verification completed. Processing additional data...")
+
+# Process job numbers from PO files (if needed)
 job_number_pattern = re.compile(r"Job[:\s]*([\d\.]+)", re.IGNORECASE)
 
-for i, row in df_po.iterrows():
+for i, row in tqdm(df_po.iterrows(), desc="Extracting job numbers from PO files", total=len(df_po)):
     job_num = row["Job_Number"].strip()
     po_file = row["po_verified_by"].strip()
     
@@ -1267,15 +1342,26 @@ for i, row in df_po.iterrows():
        (po_file and not po_file.startswith("ERROR:")):
         pdf_path = os.path.join(pdf_folder, po_file)
         try:
-            doc = fitz.open(pdf_path)
-            for page in doc:
-                text = page.get_text()
-                match = job_number_pattern.search(text)
-                if match:
-                    df_po.at[i, "Job_Number"] = match.group(1).strip()
-                    break
+            # Use cached PDF if available
+            if po_file in pdf_cache:
+                pdf_text = pdf_cache[po_file]
+            else:
+                doc = fitz.open(pdf_path)
+                pdf_text = ""
+                for page in doc:
+                    pdf_text += page.get_text()
+                doc.close()
+                # Cache for potential reuse
+                pdf_cache[po_file] = pdf_text
+            
+            match = job_number_pattern.search(pdf_text)
+            if match:
+                df_po.at[i, "Job_Number"] = match.group(1).strip()
         except Exception as e:
             print(f"ERROR: Error reading PDF {po_file}: {e}")
+
+# Clear cache again
+pdf_cache.clear()
 
 # -------------------------------
 # PM NAME LOOKUP AND REPLACE ORDERED_BY
@@ -1314,37 +1400,81 @@ pm_dict = {
     for _, row in df_pm.iterrows()
 }
 
+print("INFO: Processing PM assignments...")
+
 # Replace ordered_by with PM Full Name
 df_po["ordered_by"] = df_po["Job_Number"].map(pm_dict).map(code_to_name).fillna("")
 
 # -------------------------------
 # ROUTING CODE BASED ON NEW ordered_by
 # -------------------------------
+print("INFO: Processing routing codes...")
 df_routing = pd.read_excel(routing_path)
 
 df_routing["Ordered By"] = df_routing["Ordered By"].astype(str).str.strip().str.upper()
 df_routing["Distribution"] = df_routing["Distribution"].astype(str).str.strip().str.upper()
 df_routing["Code"] = df_routing["Code"].astype(str).str.strip()
 
-df_po["ordered_by"] = df_po["ordered_by"].astype(str).str.strip().str.upper()
-df_po["distribution_code"] = df_po["distribution_code"].astype(str).str.strip().str.upper()
+# Build routing lookup dictionary
+routing_dict = {}
+for _, row in df_routing.iterrows():
+    ordered_by = row["Ordered By"]
+    distribution = row["Distribution"]
+    code = row["Code"]
+    
+    if ordered_by and distribution and code:
+        key = (ordered_by, distribution)
+        routing_dict[key] = code
 
-routing_dict = {
-    (row["Ordered By"], row["Distribution"]): row["Code"]
-    for _, row in df_routing.iterrows()
-}
+print(f"INFO: Built routing lookup with {len(routing_dict)} entries")
 
-df_po["routing_code"] = df_po.apply(
-    lambda row: routing_dict.get((row["ordered_by"], row["distribution_code"]), ""), axis=1
-)
+# Apply routing codes
+routing_codes = []
+for _, row in tqdm(df_po.iterrows(), desc="Applying routing codes", total=len(df_po)):
+    ordered_by = row["ordered_by"].strip().upper()
+    distribution_code = row["distribution_code"].strip().upper()
+    
+    if ordered_by and distribution_code:
+        key = (ordered_by, distribution_code)
+        routing_code = routing_dict.get(key, "")
+    else:
+        routing_code = ""
+    
+    routing_codes.append(routing_code)
 
-# Optional quick check
-print(df_po[["Job_Number", "ordered_by", "distribution_code", "routing_code"]].head())
+df_po["routing_code"] = routing_codes
 
-df_po = df_po.astype(str).replace("nan", "")
+# -------------------------------
+# SAVE THE FINAL PO VERIFIED FILE
+# -------------------------------
+print("INFO: Saving final po_verified.csv file...")
 
-df_po.to_csv(output_path, index=False)
-print("SUCCESS: Final file saved to:", output_path)
+# Ensure all required columns exist
+required_columns = [
+    "file_name", "extracted_po_number", "clean_po_number",
+    "PO_Number", "Job_Number", "WO_Number", "Remarks",
+    "po_verified_by", "job_verified_by", "ordered_by", 
+    "distribution_code", "routing_code"
+]
+
+for col in required_columns:
+    if col not in df_po.columns:
+        df_po[col] = ""
+
+# Save the final file
+df_po[required_columns].to_csv(output_path, index=False)
+print(f"SUCCESS: Final po_verified.csv saved to {output_path}")
+print(f"INFO: File contains {len(df_po)} rows with {len(required_columns)} columns")
+
+# Show summary statistics
+print("\n" + "="*50)
+print("PROCESSING SUMMARY")
+print("="*50)
+print(f"Total records processed: {len(df_po)}")
+print(f"PO numbers found: {len([x for x in df_po['po_verified_by'] if x and not x.startswith('ERROR')])}")
+print(f"Job numbers found: {len([x for x in df_po['job_verified_by'] if x and not x.startswith('ERROR')])}")
+print(f"Routing codes assigned: {len([x for x in df_po['routing_code'] if x])}")
+print("="*50)
 
 # Cell 1: Import Libraries
 # !pip install pymupdf opencv-python pytesseract numpy pandas
@@ -2081,149 +2211,331 @@ with open(txt_path, "w") as f:
 
 print("SUCCESS: Spectrum import files generated successfully (CSV and cleaned TXT).")
 
+import os
 import re
+import math
 import pandas as pd
-from openpyxl import load_workbook
+from datetime import datetime
 
 # === File paths ===
 source_path = "outputs/excel_files/final_invoice_data.xlsx"
-template_path = "outputs/excel_files/APInvoicesImport1.xlsx"
 gl_item_code_path = "data/GL_Item_Code.csv"
+out_txt_path = "outputs/excel_files/APInvoicesImport1.txt"
+
+# === Helpers ===
+def fmt_date_mmddyyyy(val):
+    if pd.isna(val) or str(val).strip().lower() == "nan" or str(val).strip() == "":
+        return ""
+    if isinstance(val, (pd.Timestamp, datetime)):
+        dt = val
+    else:
+        s = str(val).strip()
+        try:
+            num = float(s)
+            dt = pd.to_datetime(num, unit="D", origin="1899-12-30", errors="coerce")
+            if pd.isna(dt):
+                raise ValueError
+        except Exception:
+            dt = None
+            for fmt in ("%m/%d/%Y", "%Y-%m-%d", "%m-%d-%Y", "%m/%d/%y"):
+                try:
+                    dt = datetime.strptime(s, fmt)
+                    break
+                except Exception:
+                    pass
+            if dt is None:
+                return ""
+    return f"{dt.month:02d}{dt.day:02d}{dt.year:04d}"
+
+def _sanitize_text(s: str) -> str:
+    """Remove CSV-breaking chars and normalize whitespace."""
+    if s is None:
+        return ""
+    s = str(s)
+    s = s.replace(",", " ").replace("\r", " ").replace("\n", " ").replace("\t", " ")
+    s = re.sub(r"\s+", " ", s).strip()
+    return s
+
+def clean_str(v, maxlen=None):
+    if v is None or (isinstance(v, float) and math.isnan(v)):
+        s = ""
+    else:
+        s = str(v).strip()
+        if s.lower() == "nan":
+            s = ""
+    s = _sanitize_text(s)
+    if maxlen is not None:
+        return s[:maxlen]
+    return s
+
+def clean_num(n, decimals=2, allow_negative=True):
+    if n is None or (isinstance(n, float) and math.isnan(n)) or str(n).strip().lower() == "nan":
+        return ""
+    try:
+        x = float(str(n).replace(",", ""))
+        if not allow_negative and x < 0:
+            x = abs(x)
+        return f"{x:.{decimals}f}"
+    except Exception:
+        return ""
+
+def strip_dotzero(s):
+    s = clean_str(s)
+    return s[:-2] if s.endswith(".0") else s
+
+def pad_or_trim_to(fields, expected_len):
+    fields = list(fields)
+    if len(fields) < expected_len:
+        fields.extend([""] * (expected_len - len(fields)))
+    elif len(fields) > expected_len:
+        fields = fields[:expected_len]
+    return fields
+
+def normalize_phase_code(val: str) -> str:
+    """
+    Phase codes must be 4 digits, typically starting with 0 (e.g., 0320).
+    Exception: '1000' remains '1000'.
+    Input examples like '320', '0320', '320.0' all -> '0320'.
+    """
+    s = clean_str(val)
+    if not s:
+        return ""
+    s = s.split(".")[0]              # drop decimal part if present
+    s = re.sub(r"\D", "", s)         # keep digits only
+    if not s:
+        return ""
+    if s == "1000":
+        return "1000"
+    s = s[-4:]                       # in case it's longer
+    return s.zfill(4)
 
 # === Load data ===
 source_df = pd.read_excel(source_path)
-gl_item_df = pd.read_csv(gl_item_code_path, sep=",")
-gl_item_df.columns = gl_item_df.columns.str.strip()
 
-# Now split that single column into two actual columns
+# Build GL→Item map (robust to single-column CSV)
+gl_item_df = pd.read_csv(gl_item_code_path, sep=",", header=0)
+gl_item_df.columns = gl_item_df.columns.str.strip()
 if gl_item_df.shape[1] == 1:
     gl_item_df = gl_item_df.iloc[:, 0].str.split(",", expand=True)
     gl_item_df.columns = ["G/L Code", "Item_Code"]
-
-# Strip spaces again
 gl_item_df["G/L Code"] = gl_item_df["G/L Code"].astype(str).str.strip()
 gl_item_df["Item_Code"] = gl_item_df["Item_Code"].astype(str).str.strip()
-
-# Build the mapping
 gl_to_item_map = dict(zip(gl_item_df["G/L Code"], gl_item_df["Item_Code"]))
 
-# Add static columns
-source_df["Liability_Cost_Center"] = "1000"
-source_df["Expense_Cost_Center"] = "1000"
+# Defaults
+for cc_col, default in [("Liability_Cost_Center","1000"), ("Expense_Cost_Center","1000")]:
+    if cc_col not in source_df.columns:
+        source_df[cc_col] = default
 
-# === Column mapping from source -> template ===
-column_mapping = {
-    "Company_Code": "Company_Code",
-    "GL_Date": "GL_Date",
-    "Batch_Code": "Batch_Code",
-    "Vendor_Code": "Vendor_Code",
-    "Invoice_Number": "Invoice_Number",
-    "Invoice_Date": "Invoice_Date",
-    "Invoice_Type": "Invoice_Type_Code",
-    "Invoice_Amount": "Invoice_Amount",
-    "Remarks": "Remarks",
-    "Distribution_GL_Account": "Distribution_GL_Account",
-    "Job_Number": "Job_Number",
-    "Phase_Code": "Phase_Code",
-    "Cost_Type": "Cost_Type",
-    "WO_Number": "WO_Number",
-    "Liability_Cost_Center": "Liability_Cost_Center",
-    "Expense_Cost_Center": "Expense_Cost_Center"
-}
+# === Skip rows with a PO_Number ===
+def has_po(row):
+    po = clean_str(row.get("PO_Number", ""))
+    return po != ""
 
-# === Load the Excel template ===
-wb = load_workbook(template_path)
-ws = wb["Vendor Invoices"]
+work_df = source_df[~source_df.apply(has_po, axis=1)].copy()
 
-# === Build column index mapping ===
-header_row = 1
-column_indices = {
-    cell.value: cell.column for cell in ws[header_row] if cell.value in list(column_mapping.values()) + ["WO_Number", "Item_Code"]
-}
+# === Precompute WO_Number and Item_Code per your rules ===
+def compute_wo(row):
+    remarks = clean_str(row.get("Remarks", "")).lower()
+    gl_code = strip_dotzero(row.get("Distribution_GL_Account", ""))
+    wo_val = strip_dotzero(row.get("WO_Number", ""))
 
-# === Clear existing data ===
-max_row = ws.max_row
-if max_row > 1:
-    ws.delete_rows(2, max_row - 1)
-
-write_row = 2
-
-for _, row in source_df.iterrows():
-    po_value = str(row.get("PO_Number", "")).strip()
-
-    # Skip rows with a PO_Number
-    if po_value and po_value.upper() != "NAN":
-        continue
-
-    # Write mapped values
-    for src_col, tgt_col in column_mapping.items():
-        if tgt_col in column_indices:
-            col = column_indices[tgt_col]
-
-            # === If column doesn't exist in source_df, skip ===
-            if src_col not in source_df.columns:
-                continue
-
-            value = row[src_col]
-
-            if pd.isna(value):
-                value = ""
-
-            # Special formatting
-            if tgt_col in ["Job_Number", "WO_Number"]:
-                value = str(value).strip()
-                if tgt_col == "Job_Number" and re.fullmatch(r"\d+\.\d", value):
-                    value = f"{float(value):.2f}"
-                if value.lower() == "nan":
-                    value = ""
-
-            # === If GL is 1200, allow Phase/Cost/Job to be blank ===
-            if tgt_col in ["Phase_Code", "Cost_Type", "Job_Number"]:
-                if str(row.get("Distribution_GL_Account", "")).strip().rstrip(".0") == "1200":
-                    value = ""
-
-            ws.cell(row=write_row, column=col, value=value)
-
-    # === Apply WO_Number logic based on Remarks and GL Code ===
-    remarks = str(row.get("Remarks", "")).strip().lower()
-    gl_code = str(row.get("Distribution_GL_Account", "")).strip()
-    if gl_code.endswith(".0"):
-        gl_code = gl_code[:-2]
-
-    wo_val = str(row.get("WO_Number", "")).strip()
-    if wo_val.endswith(".0"):
-        wo_val = wo_val[:-2]
-
-    # Normalize for consistent checks
     is_remarks_present = remarks not in ("", "nan")
     is_wo_present = wo_val not in ("", "nan")
 
-    if "WO_Number" in column_indices:
-        col = column_indices["WO_Number"]
+    if is_wo_present:
+        return "2025"
+    if is_remarks_present:
+        return "" if gl_code == "1200" else "2025"
+    return ""
 
-        if is_wo_present:
-            ws.cell(row=write_row, column=col, value="2025")  # Rule 3
-        elif is_remarks_present:
+def compute_item_code(row):
+    gl_code = strip_dotzero(row.get("Distribution_GL_Account", ""))
+    ic = gl_to_item_map.get(gl_code, "")
+    if ic:
+        return ic if ic.startswith("!") else f"!{ic}"
+    return ""
+
+work_df["__WO_OUT__"] = work_df.apply(compute_wo, axis=1)
+work_df["__ITEM_CODE__"] = work_df.apply(compute_item_code, axis=1)
+
+# === Routing (header-level) ===
+def compute_routing_for_group(df_group: pd.DataFrame) -> str:
+    """
+    Routing priority:
+      1) If any row has GL code == '1200'           -> 'SHOP'
+      2) Else if any row has WO present             -> 'WO'
+      3) Else if any row has non-'shop' remarks AND GL != '1200' -> 'WO'
+      4) Else -> '' (blank)
+    """
+    # 1) Any GL=1200? -> SHOP
+    if df_group["Distribution_GL_Account"].astype(str).str.strip().apply(strip_dotzero).eq("1200").any():
+        return "SHOP"
+
+    # 2) Any WO present?
+    if (df_group["__WO_OUT__"].astype(str).str.strip() != "").any():
+        return "WO"
+
+    # 3) Non-shop remarks (accept typos) with GL != 1200 -> WO
+    remark_exceptions = {"shop", "shop stock", "shop stocl", "shop stockl"}
+    for _, r in df_group.iterrows():
+        gl_code = strip_dotzero(r.get("Distribution_GL_Account", ""))
+        rmk = clean_str(r.get("Remarks", "")).lower()
+        if rmk and (rmk not in remark_exceptions) and gl_code != "1200":
+            return "WO"
+
+    # 4) Default
+    return ""
+
+# Group by invoice number to emit H then Ds
+grp = work_df.groupby("Invoice_Number", dropna=False, sort=False)
+
+H_EXPECT = 24
+D_EXPECT = 36
+
+lines_written = 0
+h_count = 0
+d_count = 0
+
+os.makedirs(os.path.dirname(out_txt_path), exist_ok=True)
+with open(out_txt_path, "w", newline="", encoding="utf-8") as f:
+    for inv_no, g in grp:
+        rows = g.sort_index()
+        r0 = rows.iloc[0]
+
+        # Compute routing for the entire invoice group
+        routing_code = compute_routing_for_group(rows)
+
+        # -------- Build full H (24 fields) --------
+        vendor_code = clean_str(r0.get("Vendor_Code", ""), 10)
+        inv_number  = clean_str(r0.get("Invoice_Number", ""), 20)
+        inv_type    = clean_str(r0.get("Invoice_Type", "I"), 1) or "I"
+        inv_date    = fmt_date_mmddyyyy(r0.get("Invoice_Date", ""))
+        gl_date     = fmt_date_mmddyyyy(r0.get("GL_Date", ""))
+        batch_code  = clean_str(r0.get("Batch_Code", ""), 10)
+        header_cc   = clean_str(r0.get("Liability_Cost_Center", ""), 10)
+
+        # Prefer explicit header amount, else sum of detail amounts
+        header_amt = clean_num(r0.get("Invoice_Amount", ""), 2, allow_negative=False)
+        if header_amt == "":
+            detail_total = 0.0
+            for _, rx in rows.iterrows():
+                v = clean_num(rx.get("Invoice_Amount", 0.0) or 0.0) or "0.00"
+                detail_total += float(v)
+            header_amt = f"{detail_total:.2f}"
+
+        remarks = clean_str(r0.get("Remarks", ""), 30)
+        image_filename = clean_str(r0.get("Image_Filename", ""))  # optional column
+
+        header_full = [
+            "H",             # 1  Record Type
+            vendor_code,     # 2  Vendor
+            inv_number,      # 3  Invoice #
+            inv_type,        # 4  Type (I/C…)
+            inv_date,        # 5  Invoice Date (MMDDYYYY)
+            gl_date,         # 6  GL Date (MMDDYYYY)
+            batch_code,      # 7  Batch
+            "",              # 8  Subcontract #
+            "",              # 9  Status (left blank per current file)
+            "",              # 10 Bank Account
+            "",              # 11 Check #
+            "",              # 12 Cash GL
+            "",              # 13 Check Date
+            header_amt,      # 14 Invoice Amount
+            "",              # 15 Retention
+            "",              # 16 PO #
+            remarks,         # 17 Remarks
+            routing_code,    # 18 Routing
+            "",              # 19 Card #
+            image_filename,  # 20 Image filename
+            "",              # 21 Liability Cost Center (left blank)
+            "",              # 22 VAT Code
+            "",              # 23 VAT Tax Amt
+            "",              # 24 Discount Amt
+        ]
+        header_out = pad_or_trim_to(header_full, H_EXPECT)
+        f.write(",".join(header_out) + "\n")
+        h_count += 1
+        lines_written += 1
+
+        # -------- Details (36 fields) --------
+        for _, rx in rows.iterrows():
+            gl_code = strip_dotzero(rx.get("Distribution_GL_Account", ""))
+            amt     = clean_num(rx.get("Invoice_Amount", ""), 2, allow_negative=True)
+
+            job   = clean_str(rx.get("Job_Number", ""))
+            phase = normalize_phase_code(rx.get("Phase_Code", ""))  # <<< normalized here
+            ct    = clean_str(rx.get("Cost_Type", ""))
             if gl_code == "1200":
-                ws.cell(row=write_row, column=col, value="")  # Rule 1
+                job, phase, ct = "", "", ""  # shop expenses, no job distribution
+
+            # format job like "123.4" -> "123.40"
+            if re.fullmatch(r"\d+\.\d", job):
+                try:
+                    job = f"{float(job):.2f}"
+                except Exception:
+                    pass
+
+            wo_out      = clean_str(rx.get("__WO_OUT__"))
+            item_code   = clean_str(rx.get("__ITEM_CODE__"))
+            comp_code   = "AA1"
+            tax_code    = "NT"
+            d_remarks   = clean_str(rx.get("Remarks", ""), 30)
+            image_fn    = clean_str(rx.get("Detail_Image_Filename", "")) or image_filename
+            cost_center = clean_str(rx.get("Expense_Cost_Center", ""), 10)
+
+            # === ITEM DESC LOGIC ===
+            # If WO present OR (remarks non-shop AND gl != 1200),
+            # Item Desc = first character of item_code without leading '!'
+            remark_exceptions = {"shop", "shop stock", "shop stocl", "shop stockl"}
+            rmk_lower = d_remarks.lower()
+            condition_for_desc = (wo_out != "") or (rmk_lower and (rmk_lower not in remark_exceptions) and gl_code != "1200")
+            if condition_for_desc and item_code:
+                item_desc = clean_str(item_code.lstrip("!")[:1])
             else:
-                ws.cell(row=write_row, column=col, value="2025")  # Rule 2
+                item_desc = ""
 
-    # === Set Item_Code from G/L Code mapping ===
-    gl_code = str(row.get("Distribution_GL_Account", "")).strip()
-    if gl_code.endswith(".0"):
-        gl_code = gl_code[:-2]
-    item_code = gl_to_item_map.get(gl_code, "")
-    if item_code and "Item_Code" in column_indices:
-        item_code_prefixed = f"!{item_code}" if not item_code.startswith("!") else item_code
-        col = column_indices["Item_Code"]
-        ws.cell(row=write_row, column=col, value=item_code_prefixed)
+            detail_full = [
+                "D",            # 1  Record Type
+                vendor_code,    # 2  Vendor
+                inv_number,     # 3  Invoice #
+                inv_type,       # 4  Type
+                gl_code,        # 5  GL Dist. Account
+                amt,            # 6  Amount
+                job,            # 7  Job
+                phase,          # 8  Phase (normalized to 4 digits, except '1000')
+                ct,             # 9  Cost Type
+                d_remarks,      # 10 Remarks
+                "",             # 11 Equip Code
+                "",             # 12 Equip Cost Cat
+                "",             # 13 UOM
+                "",             # 14 Qty
+                "",             # 15 Bill Item
+                comp_code,      # 16 Company Code
+                tax_code,       # 17 Tax Code
+                wo_out,         # 18 Work Order
+                item_code,      # 19 Item Code
+                item_desc,      # 20 Item Desc (single char from Item Code when rules match)
+                "",             # 21 Unit-Cost
+                "",             # 22 WO Site Equip
+                "",             # 23 WO Site Equip Comp
+                "",             # 24 Service Contract
+                "",             # 25 Unit Bill
+                image_fn,       # 26 Image filename
+                "",             # 27 PM Work Order
+                "",             # 28 Cost Center
+                "", "", "", "", "", "", "",  # 29-36 Labor/T+M or reserved
+            ]
+            detail_out = pad_or_trim_to(detail_full, D_EXPECT)
+            f.write(",".join(detail_out) + "\n")
+            d_count += 1
+            lines_written += 1
 
-    write_row += 1
-
-# === Save changes ===
-wb.save(template_path)
-print("SUCCESS: APInvoicesImport1.xlsx updated with Item_Code mapped from G/L Code!")
+print(f"SUCCESS: wrote {out_txt_path}")
+print("=== COMMA STRUCTURE VALIDATION SUMMARY ===")
+print(f"H lines written: {h_count} (each exactly {H_EXPECT} fields)")
+print(f"D lines written: {d_count} (each exactly {D_EXPECT} fields)")
+print(f"Total lines: {lines_written}")
 
 import os
 

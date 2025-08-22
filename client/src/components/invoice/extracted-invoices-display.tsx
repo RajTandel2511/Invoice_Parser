@@ -31,6 +31,24 @@ interface ExtractedInvoice {
   isPDF: boolean;
 }
 
+// Helper function to get the current API base URL
+const getApiBaseUrl = () => {
+  const currentHost = window.location.hostname;
+  if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+    return 'http://localhost:3002/api';
+  }
+  return `http://${currentHost}:3002/api`;
+};
+
+// Helper function to get the current frontend URL
+const getFrontendUrl = () => {
+  const currentHost = window.location.hostname;
+  if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+    return 'http://localhost:3000';
+  }
+  return `http://${currentHost}:3000`;
+};
+
 export default function ExtractedInvoicesDisplay() {
   const [invoices, setInvoices] = useState<ExtractedInvoice[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -59,7 +77,7 @@ export default function ExtractedInvoicesDisplay() {
   const fetchInvoices = async () => {
     try {
       // Use the proper API base URL
-      const response = await fetch('http://192.168.1.70:3002/api/email-monitor/invoices');
+      const response = await fetch(`${getApiBaseUrl()}/email-monitor/invoices`);
       const data = await response.json();
       if (data.success) {
         setInvoices(data.invoices);
@@ -140,7 +158,7 @@ export default function ExtractedInvoicesDisplay() {
         
         // Redirect to main page after a short delay
         setTimeout(() => {
-          window.location.href = 'http://192.168.1.70:3000/';
+          window.location.href = `${getFrontendUrl()}/`;
         }, 1500);
       } else {
         toast({

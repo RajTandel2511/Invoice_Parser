@@ -1,6 +1,15 @@
 const getApiBaseUrl = () => {
-  // Point to the backend server port
-  return 'http://192.168.1.70:3002/api';
+  // Get the current hostname from the window location
+  const currentHost = window.location.hostname;
+  
+  // If we're on localhost, use localhost for the API
+  if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+    return 'http://localhost:3002/api';
+  }
+  
+  // If we're on a network IP, use the same IP for the API
+  // This ensures the frontend and backend use the same network interface
+  return `http://${currentHost}:3002/api`;
 };
 
 const API_BASE_URL = getApiBaseUrl();
@@ -342,7 +351,7 @@ export const api = {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'APInvoicesImport1.xlsx';
+      link.download = 'APInvoicesImport1.txt';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -762,6 +771,26 @@ export const api = {
       return {
         success: false,
         message: error instanceof Error ? error.message : 'Failed to get preserved PDF files'
+      };
+    }
+  },
+
+  // Get processed invoices from final_invoice_data.xlsx
+  async getProcessedInvoices(): Promise<{ success: boolean; invoices?: any[]; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/invoices`);
+      const result = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get processed invoices');
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Get processed invoices error:', error);
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to get processed invoices'
       };
     }
   }

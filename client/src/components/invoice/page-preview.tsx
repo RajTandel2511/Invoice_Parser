@@ -10,6 +10,15 @@ import { Switch } from '@/components/ui/switch';
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.js`;
 
+// Helper function to get the current frontend URL
+const getFrontendUrl = () => {
+  const currentHost = window.location.hostname;
+  if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
+    return 'http://localhost:3000';
+  }
+  return `http://${currentHost}:3000`;
+};
+
 interface PagePreviewProps {
   uploadedFiles: Array<{
     filename: string;
@@ -506,7 +515,7 @@ export default function PagePreview({ uploadedFiles, onClose }: PagePreviewProps
         
         // Redirect to main page after successful export
         setTimeout(() => {
-          window.location.href = 'http://192.168.1.70:3000/';
+          window.location.href = `${getFrontendUrl()}/`;
         }, 1000);
       } else {
         console.error('Failed to export grouped PDFs:', result.message);

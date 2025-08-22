@@ -1356,7 +1356,7 @@ export default function Upload() {
 
       toast({
         title: "Downloading Processed Files",
-        description: "Downloading APInvoicesImport1.xlsx and invoice_spectrum_format.txt...",
+        description: "Downloading APInvoicesImport1.txt and invoice_spectrum_format.txt...",
       });
 
       // Download both files
@@ -1370,7 +1370,7 @@ export default function Upload() {
         });
       } else {
         const errors = [];
-        if (!apInvoicesResult.success) errors.push("APInvoicesImport1.xlsx");
+        if (!apInvoicesResult.success) errors.push("APInvoicesImport1.txt");
         if (!spectrumResult.success) errors.push("invoice_spectrum_format.txt");
         
         toast({
