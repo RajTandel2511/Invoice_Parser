@@ -2,7 +2,17 @@
   "approved": true,
   "approved_matches": [
     {
-      "TXT_File": "1_1755887243708.txt",
+      "TXT_File": "127813_1755894601049.txt",
+      "Vendor_Code": "NORWRI",
+      "Vendor_Name": "Norman S. Wright Mech. Equip. LLC.",
+      "Vendor_Contact": "(415) 467-0900",
+      "Vendor_Address": "99A South Hill Dr.  Brisbane, CA 94005",
+      "Address_Match_Score": "96",
+      "Matched_Contact": "4154670900",
+      "Matched_By": "contact + address"
+    },
+    {
+      "TXT_File": "1_1755894595697.txt",
       "Vendor_Code": "RSDTOT",
       "Vendor_Name": "RSD",
       "Vendor_Contact": "",
@@ -12,7 +22,7 @@
       "Matched_By": "address only"
     },
     {
-      "TXT_File": "2_1755887243712.txt",
+      "TXT_File": "2_1755894595700.txt",
       "Vendor_Code": "RSDTOT",
       "Vendor_Name": "RSD",
       "Vendor_Contact": "",
@@ -22,7 +32,7 @@
       "Matched_By": "address only"
     },
     {
-      "TXT_File": "3_1755887243715.txt",
+      "TXT_File": "3_1755894595693.txt",
       "Vendor_Code": "RSDTOT",
       "Vendor_Name": "RSD",
       "Vendor_Contact": "",
@@ -32,7 +42,7 @@
       "Matched_By": "address only"
     },
     {
-      "TXT_File": "4_1755887243717.txt",
+      "TXT_File": "4_1755894595691.txt",
       "Vendor_Code": "JONSUP",
       "Vendor_Name": "Johnstone Supply",
       "Vendor_Contact": "",
@@ -42,7 +52,7 @@
       "Matched_By": "address only"
     },
     {
-      "TXT_File": "INV-01-875854.PDF_page_1_1755887243721.txt",
+      "TXT_File": "INV-01-875854.PDF_page_1_1755894595704.txt",
       "Vendor_Code": "LORSON",
       "Vendor_Name": "Lord & Sons Inc.",
       "Vendor_Contact": "(408) 817-8910",
@@ -52,7 +62,7 @@
       "Matched_By": "contact + address"
     },
     {
-      "TXT_File": "SIN221250_page_1_1755887243722.txt",
+      "TXT_File": "SIN221250_page_1_1755894595706.txt",
       "Vendor_Code": "CALHYD",
       "Vendor_Name": "California Hydronics Corp",
       "Vendor_Contact": "(510) 293-3080",

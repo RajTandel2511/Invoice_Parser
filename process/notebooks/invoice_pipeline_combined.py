@@ -26,7 +26,7 @@ try:
     import os
     # Add the parent directory to the Python path to find network_config.py
     sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from network_config import NETWORK_CONFIG, get_network_path, get_local_fallback, is_network_enabled
+    from network_config import NETWORK_CONFIG, get_network_path, get_local_fallback, is_network_enabled, get_accessible_project_list_path
     print("SUCCESS: Loaded network configuration from network_config.py")
 except ImportError:
     print("WARNING: network_config.py not found, using default configuration")
@@ -35,6 +35,7 @@ except ImportError:
         "projects_server": "192.168.1.130",
         "projects_share": "Projects", 
         "projects_folder": "Raj",
+        "project_list_file": "Project List -.xlsx",
         "enable_network": True,
         "local_fallback": "data/network_fallback/"
     }
@@ -51,6 +52,7 @@ except ImportError:
 # Configure network paths
 NETWORK_PATHS = {
     "projects_folder": get_network_path(),
+    "project_list": get_accessible_project_list_path() if 'get_accessible_project_list_path' in globals() else "data/Project List -.xlsx",
     "local_fallback": get_local_fallback()
 }
 
@@ -1168,8 +1170,11 @@ from tqdm import tqdm
 pdf_folder = PROJECTS_PATH if PROJECTS_PATH else "data/network_fallback/"
 input_path = "outputs/excel_files/pixtral_po_results.csv"
 output_path = "outputs/excel_files/po_verified.csv"
-routing_path = "data/Routing_Code.xlsx"
-pm_file_path = "data/Job_Listing_by_PM.xls"
+routing_path = "data/Routing_Code.xls"
+
+# NEW: point to the new Projects list file (xlsx) - using network configuration
+pm_file_path = get_accessible_project_list_path()
+print(f"INFO: Using Project List file: {pm_file_path}")
 
 df_po = pd.read_csv(input_path)
 
@@ -1208,7 +1213,7 @@ def extract_info_optimized(identifiers, id_types, pdf_folder):
         try:
             # Check if PDF is already cached
             if pdf_file in pdf_cache:
-                pdf_data = pdf_cache[pdf_file]
+                pdf_text = pdf_cache[pdf_file]
             else:
                 # Process PDF and cache the result
                 doc = fitz.open(pdf_path)
@@ -1335,8 +1340,8 @@ print("INFO: PDF verification completed. Processing additional data...")
 job_number_pattern = re.compile(r"Job[:\s]*([\d\.]+)", re.IGNORECASE)
 
 for i, row in tqdm(df_po.iterrows(), desc="Extracting job numbers from PO files", total=len(df_po)):
-    job_num = row["Job_Number"].strip()
-    po_file = row["po_verified_by"].strip()
+    job_num = str(row["Job_Number"]).strip()
+    po_file = str(row["po_verified_by"]).strip()
     
     if (not job_num or job_num.lower() in ["", "nan", "none"]) and \
        (po_file and not po_file.startswith("ERROR:")):
@@ -1364,46 +1369,63 @@ for i, row in tqdm(df_po.iterrows(), desc="Extracting job numbers from PO files"
 pdf_cache.clear()
 
 # -------------------------------
-# PM NAME LOOKUP AND REPLACE ORDERED_BY
+# PM NAME LOOKUP (USING NEW PROJECTS LIST) AND REPLACE ordered_by
 # -------------------------------
-df_pm = pd.read_excel(pm_file_path)
-
-df_pm["Job #"] = df_pm["Job #"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-df_pm["Project Mgr."] = df_pm["Project Mgr."].astype(str).str.strip().str.upper()
-df_po["Job_Number"] = df_po["Job_Number"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
-
-# Apply consistent xx.xx formatting
+# Ensure Job_Number is formatted consistently as xx.xx
 def format_job_number(val):
     try:
         num = float(val)
         return f"{num:.2f}"
     except:
-        return val
+        return str(val)
 
+df_po["Job_Number"] = df_po["Job_Number"].astype(str).str.strip().str.replace(r"\.0$", "", regex=True)
 df_po["Job_Number"] = df_po["Job_Number"].apply(format_job_number)
 
-code_to_name = {
-    "RAORAK": "Rakesh Rao",
-    "TANARV": "Arvind Tandel",
-    "TANMUK": "Mukesh Tandel",
-    "TANNIR": "Niraj Tandel",
-    "TANJIG": "Jignesh Tandel",
-    "DANDRO": "Dan Droubay",
-    "PATSHI": "Shirish Patel",
-    "ANDSTE": "Steven Anderson",
-    "ANIABH": "Anil Abhay"
+# Read the new Projects list file which contains "Job No." and "PM" (first names)
+df_pm = pd.read_excel(pm_file_path)
+
+# Normalize its Job No. to match xx.xx strings
+def norm_job_no(v):
+    try:
+        return f"{float(v):.2f}"
+    except:
+        s = str(v).strip()
+        return s
+
+df_pm_cols = {c.strip(): c for c in df_pm.columns}  # tolerant to stray spaces/newlines
+job_no_col = next((df_pm_cols[k] for k in df_pm_cols if k.lower().replace(" ", "") in ["jobno.", "jobno", "job#","jobnumber"]), None)
+pm_col = next((df_pm_cols[k] for k in df_pm_cols if k.strip().lower() in ["pm", "projectmgr.", "projectmgr", "project manager"]), None)
+
+if job_no_col is None or pm_col is None:
+    raise ValueError("Could not find 'Job No.' and 'PM' columns in Projects list file.")
+
+df_pm = df_pm[[job_no_col, pm_col]].copy()
+df_pm[job_no_col] = df_pm[job_no_col].apply(norm_job_no).astype(str).str.strip()
+df_pm[pm_col] = df_pm[pm_col].astype(str).str.strip().str.title()
+
+# Map first names to the same full names you currently output
+first_name_to_full = {
+    "Rakesh": "Rakesh Rao",
+    "Arvind": "Arvind Tandel",
+    "Mukesh": "Mukesh Tandel",
+    "Niraj":  "Niraj Tandel",
+    "Jignesh":"Jignesh Tandel",
+    # Add any others that appear in the Projects list
 }
 
-# Build lookup for PM Name
-pm_dict = {
-    row["Job #"]: row["Project Mgr."]
-    for _, row in df_pm.iterrows()
-}
+# Build lookup: Job No. (xx.xx) -> PM full name
+pm_dict = {}
+for _, r in df_pm.iterrows():
+    job_no = r[job_no_col]
+    pm_first = r[pm_col]
+    full = first_name_to_full.get(pm_first, pm_first)  # if unknown, leave as-is
+    pm_dict[job_no] = full
 
-print("INFO: Processing PM assignments...")
+print("INFO: Processing PM assignments from Projects list...")
 
-# Replace ordered_by with PM Full Name
-df_po["ordered_by"] = df_po["Job_Number"].map(pm_dict).map(code_to_name).fillna("")
+# Replace ordered_by with PM Full Name from Projects list (fallback to existing if not found)
+df_po["ordered_by"] = df_po["Job_Number"].map(pm_dict).fillna(df_po["ordered_by"]).fillna("")
 
 # -------------------------------
 # ROUTING CODE BASED ON NEW ordered_by
@@ -1431,8 +1453,8 @@ print(f"INFO: Built routing lookup with {len(routing_dict)} entries")
 # Apply routing codes
 routing_codes = []
 for _, row in tqdm(df_po.iterrows(), desc="Applying routing codes", total=len(df_po)):
-    ordered_by = row["ordered_by"].strip().upper()
-    distribution_code = row["distribution_code"].strip().upper()
+    ordered_by = str(row["ordered_by"]).strip().upper()
+    distribution_code = str(row["distribution_code"]).strip().upper()
     
     if ordered_by and distribution_code:
         key = (ordered_by, distribution_code)
@@ -1471,8 +1493,8 @@ print("\n" + "="*50)
 print("PROCESSING SUMMARY")
 print("="*50)
 print(f"Total records processed: {len(df_po)}")
-print(f"PO numbers found: {len([x for x in df_po['po_verified_by'] if x and not x.startswith('ERROR')])}")
-print(f"Job numbers found: {len([x for x in df_po['job_verified_by'] if x and not x.startswith('ERROR')])}")
+print(f"PO numbers found: {len([x for x in df_po['po_verified_by'] if x and not str(x).startswith('ERROR')])}")
+print(f"Job numbers found: {len([x for x in df_po['job_verified_by'] if x and not str(x).startswith('ERROR')])}")
 print(f"Routing codes assigned: {len([x for x in df_po['routing_code'] if x])}")
 print("="*50)
 
