@@ -222,11 +222,13 @@ If any field is unclear or missing, return it as an empty string `""`. Do not gu
    - Use Invoice_Date if GL_Date is missing (they are always the same).
 
 2. **Invoice_Number**
+   - ⚠️ CRITICAL: Invoice Number is ALWAYS present on every invoice - NEVER return empty string for this field!
    - Look for: "Invoice #", "Invoice No.", "Inv #", "Doc #", "Credit Memo", or any line that contains "Credit" followed by a number
    - Extract only the number — do not include words like "Credit Memo"
    - Examples: From "CREDIT SLAKEY MEMO 859388323", extract "859388323"
    - ⛔ Avoid: "Customer Number", "Cust No.", "Account #"
    - Remove symbols like `#`, `:`.
+   - 🔍 If not immediately obvious, search the ENTIRE document thoroughly - invoice numbers are always there somewhere!
 
 3. **Invoice_Date**
    - Look for: "Invoice Date", "Date Issued", "Inv Date"
@@ -272,6 +274,7 @@ If any field is unclear or missing, return it as an empty string `""`. Do not gu
 ---
 
 ❗ LOGICAL RULES:
+- ⚠️ Invoice_Number is MANDATORY - every invoice has one, so NEVER return empty string for this field!
 - If Tax_Amount is present and greater than 0, then Invoice_Amount and Amount_Before_Taxes **must be different**, based on the actual visible values
 - Never extract the same amount for both fields if Tax_Amount is present
 - Only use amounts shown clearly next to their correct labels — no guessing or assumptions
@@ -2079,6 +2082,140 @@ for i, col in enumerate(ws.iter_cols(), 1):  # 1-based index
 wb.save(output_path)
 print("SUCCESS: Final Excel saved with PO classification and auto-sized columns:", output_path)
 
+# ============================================================================
+# RENAME PREVIEW STORAGE FILES BEFORE GENERATING OUTPUT FILES
+# ============================================================================
+print("\n=== STARTING FILE RENAMING PROCESS ===")
+print("Renaming files in preview_storage to match invoice numbers...")
+
+# Get today's date
+from datetime import datetime
+today_date = datetime.now().strftime("%Y-%m-%d")
+print(f"Today's date: {today_date}")
+
+# Paths
+preview_storage = os.path.join(os.path.dirname(__file__), '..', 'data', 'preview_storage')
+
+# Check if preview_storage exists
+if not os.path.exists(preview_storage):
+    print(f"ERROR: Preview storage folder not found: {preview_storage}")
+else:
+    try:
+        # Read the Excel file we just created
+        df_for_renaming = pd.read_excel(output_path)
+        
+        # Check required columns
+        required_columns = ['file_name', 'Invoice_Number']
+        missing_columns = [col for col in required_columns if col not in df_for_renaming.columns]
+        if missing_columns:
+            print(f"ERROR: Missing required columns: {missing_columns}")
+            print(f"Available columns: {list(df_for_renaming.columns)}")
+        else:
+            print(f"Found {len(df_for_renaming)} invoice records")
+            
+            # Get list of files in preview_storage
+            preview_files = [f for f in os.listdir(preview_storage) if f.lower().endswith(('.pdf', '.PDF'))]
+            print(f"Found {len(preview_files)} PDF files in preview_storage")
+            
+            renamed_count = 0
+            errors = []
+            
+            # Process each invoice record
+            for index, row in df_for_renaming.iterrows():
+                file_name = str(row['file_name']).strip()
+                invoice_number = str(row['Invoice_Number']).strip()
+                
+                # Skip if missing data
+                if not file_name or not invoice_number or file_name == 'nan' or invoice_number == 'nan':
+                    continue
+                
+                # Find matching file in preview_storage (case-insensitive)
+                matching_file = None
+                for preview_file in preview_files:
+                    # First try exact case-insensitive match
+                    if preview_file.lower() == file_name.lower():
+                        matching_file = preview_file
+                        break
+                    # If no exact match, try to find a close match
+                    elif preview_file.lower().replace('_', '').replace('-', '') == file_name.lower().replace('_', '').replace('-', ''):
+                        matching_file = preview_file
+                        break
+                
+                if not matching_file:
+                    print(f"WARNING: No matching file found for {file_name}")
+                    continue
+                
+                # Create new filename
+                # Remove any invalid characters and ensure it's clean
+                clean_invoice_number = ''.join(c for c in invoice_number if c.isalnum() or c in '-_')
+                
+                # Create filename: {invoice_number}_{today_date}.pdf
+                new_filename = f"{clean_invoice_number}_{today_date}.pdf"
+                
+                # Ensure filename is under 40 characters
+                if len(new_filename) > 40:
+                    # Truncate invoice number to fit
+                    max_invoice_length = 40 - len(today_date) - 6  # 6 for "_" and ".pdf"
+                    clean_invoice_number = clean_invoice_number[:max_invoice_length]
+                    new_filename = f"{clean_invoice_number}_{today_date}.pdf"
+                    print(f"WARNING: Invoice number truncated to fit 40 character limit: {new_filename}")
+                
+                # Rename the file
+                old_file_path = os.path.join(preview_storage, matching_file)
+                new_file_path = os.path.join(preview_storage, new_filename)
+                
+                try:
+                    if os.path.exists(new_file_path):
+                        # If file with same name exists, add a counter
+                        counter = 1
+                        while os.path.exists(new_file_path):
+                            name_without_ext = new_filename[:-4]
+                            new_filename = f"{name_without_ext}_{counter}.pdf"
+                            new_file_path = os.path.join(preview_storage, new_filename)
+                            counter += 1
+                    
+                    os.rename(old_file_path, new_file_path)
+                    print(f"✅ Renamed: {matching_file} → {new_filename}")
+                    renamed_count += 1
+
+                    # After renaming, also copy the file to Testing\Invoices at project root
+                    try:
+                        project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                        testing_invoices_dir = os.path.join(project_root, 'Testing', 'Invoices')
+                        os.makedirs(testing_invoices_dir, exist_ok=True)
+
+                        # Destination path (handle collisions by appending a counter)
+                        copy_dest_path = os.path.join(testing_invoices_dir, new_filename)
+                        if os.path.exists(copy_dest_path):
+                            counter_copy = 1
+                            base_name_no_ext = new_filename[:-4]
+                            while os.path.exists(copy_dest_path):
+                                copy_dest_path = os.path.join(testing_invoices_dir, f"{base_name_no_ext}_{counter_copy}.pdf")
+                                counter_copy += 1
+
+                        import shutil
+                        shutil.copy2(new_file_path, copy_dest_path)
+                        print(f"📄 Copied to Testing\\Invoices: {os.path.basename(copy_dest_path)}")
+                    except Exception as e:
+                        print(f"WARNING: Failed to copy to Testing\\Invoices: {e}")
+                    
+                except Exception as e:
+                    error_msg = f"Error renaming {matching_file}: {e}"
+                    print(f"❌ {error_msg}")
+                    errors.append(error_msg)
+            
+            print(f"\n=== FILE RENAMING COMPLETED ===")
+            print(f"Successfully renamed: {renamed_count} files")
+            if errors:
+                print(f"Errors encountered: {len(errors)}")
+                for error in errors:
+                    print(f"  - {error}")
+                    
+    except Exception as e:
+        print(f"❌ FILE RENAMING FAILED: {e}")
+
+print("File renaming process completed. Now generating output files with correct filenames...")
+
 import pandas as pd
 import numpy as np
 import os
@@ -2144,6 +2281,31 @@ for _, inv_row in invoice_df.iterrows():
     
     source_file_base = po_match.iloc[0]["Base_File_Name"]
     routing_code = po_match.iloc[0]["routing_code"]
+
+    # Derive header filename to match renamed file in preview_storage
+    try:
+        # Use same date format and 40-char constraint as earlier renamer
+        clean_inv_num_hdr2 = ''.join(c for c in str(invoice_number) if c.isalnum() or c in '-_')
+        expected_name_hdr2 = f"{clean_inv_num_hdr2}_{today_date}.pdf"
+        if len(expected_name_hdr2) > 40:
+            max_len_hdr2 = 40 - len(today_date) - 6  # 6 for "_" and ".pdf"
+            clean_inv_num_hdr2 = clean_inv_num_hdr2[:max_len_hdr2]
+            expected_name_hdr2 = f"{clean_inv_num_hdr2}_{today_date}.pdf"
+
+        preview_storage_hdr2 = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'preview_storage')
+        header_filename = expected_name_hdr2
+        try:
+            if os.path.isdir(preview_storage_hdr2):
+                files_hdr2 = [fn for fn in os.listdir(preview_storage_hdr2) if fn.lower().endswith(('.pdf', '.PDF'))]
+                if expected_name_hdr2 not in files_hdr2:
+                    candidates2 = [fn for fn in files_hdr2 if fn.startswith(expected_name_hdr2[:-4])]
+                    if candidates2:
+                        candidates2.sort()
+                        header_filename = candidates2[0]
+        except Exception:
+            pass
+    except Exception:
+        header_filename = ""
     
     # Find PO lines matching the source file
     if po_lines_df.empty or "Base_File_Name" not in po_lines_df.columns:
@@ -2191,7 +2353,7 @@ for _, inv_row in invoice_df.iterrows():
     # Header Line
     header = [
         "H", po_number, invoice_date, invoice_number, invoice_date, gl_date,
-        f"{total_amount:.2f}", "", "", "", "", "", "", routing_code, "", f"{tax_amount:.2f}"
+        f"{total_amount:.2f}", "", "", "", "", "", "", routing_code, header_filename, f"{tax_amount:.2f}"
     ]
     output_rows.append(header)
 
@@ -2334,6 +2496,10 @@ def normalize_phase_code(val: str) -> str:
 # === Load data ===
 source_df = pd.read_excel(source_path)
 
+# Load po_verified.csv for routing codes
+po_verified_df = pd.read_csv("outputs/excel_files/po_verified.csv")
+print(f"Loaded po_verified.csv with {len(po_verified_df)} records for routing codes")
+
 # Build GL→Item map (robust to single-column CSV)
 gl_item_df = pd.read_csv(gl_item_code_path, sep=",", header=0)
 gl_item_df.columns = gl_item_df.columns.str.strip()
@@ -2385,20 +2551,27 @@ work_df["__ITEM_CODE__"] = work_df.apply(compute_item_code, axis=1)
 def compute_routing_for_group(df_group: pd.DataFrame) -> str:
     """
     Routing priority:
-      1) If any row has GL code == '1200'           -> 'SHOP'
-      2) Else if any row has WO present             -> 'WO'
-      3) Else if any row has non-'shop' remarks AND GL != '1200' -> 'WO'
-      4) Else -> '' (blank)
+      1) If any row has 'TOOLS' in remarks           -> 'TOOLS'
+      2) Else if any row has GL code == '1200'       -> 'SHOP'
+      3) Else if any row has WO present              -> 'WO'
+      4) Else if any row has non-'shop' remarks AND GL != '1200' -> 'WO'
+      5) Else -> '' (blank)
     """
-    # 1) Any GL=1200? -> SHOP
+    # 1) Check for TOOLS in remarks (highest priority)
+    for _, r in df_group.iterrows():
+        rmk = clean_str(r.get("Remarks", "")).lower()
+        if rmk and "tools" in rmk.lower():
+            return "TOOLS"
+
+    # 2) Any GL=1200? -> SHOP
     if df_group["Distribution_GL_Account"].astype(str).str.strip().apply(strip_dotzero).eq("1200").any():
         return "SHOP"
 
-    # 2) Any WO present?
+    # 3) Any WO present?
     if (df_group["__WO_OUT__"].astype(str).str.strip() != "").any():
         return "WO"
 
-    # 3) Non-shop remarks (accept typos) with GL != 1200 -> WO
+    # 4) Non-shop remarks (accept typos) with GL != 1200 -> WO
     remark_exceptions = {"shop", "shop stock", "shop stocl", "shop stockl"}
     for _, r in df_group.iterrows():
         gl_code = strip_dotzero(r.get("Distribution_GL_Account", ""))
@@ -2406,7 +2579,7 @@ def compute_routing_for_group(df_group: pd.DataFrame) -> str:
         if rmk and (rmk not in remark_exceptions) and gl_code != "1200":
             return "WO"
 
-    # 4) Default
+    # 5) Default
     return ""
 
 # Group by invoice number to emit H then Ds
@@ -2426,7 +2599,57 @@ with open(out_txt_path, "w", newline="", encoding="utf-8") as f:
         r0 = rows.iloc[0]
 
         # Compute routing for the entire invoice group
-        routing_code = compute_routing_for_group(rows)
+        # First try to get routing code from po_verified.csv based on PO_Number or Invoice_Number
+        routing_code = ""
+        
+        # Try to find routing code in po_verified.csv
+        for _, row in rows.iterrows():
+            # First try PO_Number
+            po_number = row.get("PO_Number")
+            if po_number and not pd.isna(po_number):
+                try:
+                    po_number_str = str(po_number).strip()
+                    po_match = po_verified_df.loc[po_verified_df["PO_Number"].astype(str).str.strip() == po_number_str]
+                    if not po_match.empty:
+                        routing_from_po = po_match.iloc[0].get("routing_code", "")
+                        if routing_from_po and str(routing_from_po).strip() not in ["", "nan"]:
+                            routing_code = str(routing_from_po).strip()
+                            print(f"Found routing code '{routing_code}' for PO {po_number_str}")
+                            break
+                except Exception as e:
+                    print(f"Error looking up routing code for PO {po_number}: {e}")
+                    pass
+            
+            # If no routing code found via PO_Number, try Invoice_Number
+            if not routing_code:
+                invoice_number = row.get("Invoice_Number")
+                if invoice_number and not pd.isna(invoice_number):
+                    try:
+                        inv_number_str = str(invoice_number).strip()
+                        # Look for invoice number in po_verified.csv (might be in file_name or other columns)
+                        # Make matching more flexible to handle formatting differences
+                        inv_match = po_verified_df[
+                            (po_verified_df["file_name"].str.contains(inv_number_str, case=False, na=False)) |
+                            (po_verified_df["file_name"].str.replace('-', '').str.replace(' ', '').str.replace('.', '').str.contains(inv_number_str.replace('-', '').replace(' ', '').replace('.', ''), case=False, na=False)) |
+                            (po_verified_df["extracted_po_number"].astype(str).str.contains(inv_number_str, case=False, na=False))
+                        ]
+                        if not inv_match.empty:
+                            # First try routing_code column
+                            routing_from_inv = inv_match.iloc[0].get("routing_code", "")
+                            if routing_from_inv and str(routing_from_inv).strip() not in ["", "nan"]:
+                                routing_code = str(routing_from_inv).strip()
+                                print(f"Found routing code '{routing_code}' for Invoice {inv_number_str}")
+                                break
+                            
+
+                    except Exception as e:
+                        print(f"Error looking up routing code for Invoice {invoice_number}: {e}")
+                        pass
+        
+        # If no routing code found in po_verified.csv, fall back to computed routing
+        if not routing_code:
+            routing_code = compute_routing_for_group(rows)
+            print(f"Using computed routing code for invoice {inv_no}: '{routing_code}'")
 
         # -------- Build full H (24 fields) --------
         vendor_code = clean_str(r0.get("Vendor_Code", ""), 10)
@@ -2447,7 +2670,36 @@ with open(out_txt_path, "w", newline="", encoding="utf-8") as f:
             header_amt = f"{detail_total:.2f}"
 
         remarks = clean_str(r0.get("Remarks", ""), 30)
-        image_filename = clean_str(r0.get("Image_Filename", ""))  # optional column
+
+        # Derive header image filename to match the renamed file in preview_storage
+        try:
+            from datetime import datetime
+            today_date_hdr = datetime.now().strftime("%Y-%m-%d")
+            # Build expected base name using same rule as renamer (<= 40 incl .pdf)
+            clean_inv_num_hdr = ''.join(c for c in inv_number if c.isalnum() or c in '-_')
+            expected_name_hdr = f"{clean_inv_num_hdr}_{today_date_hdr}.pdf"
+            if len(expected_name_hdr) > 40:
+                max_len_hdr = 40 - len(today_date_hdr) - 6  # 6 for "_" and ".pdf"
+                clean_inv_num_hdr = clean_inv_num_hdr[:max_len_hdr]
+                expected_name_hdr = f"{clean_inv_num_hdr}_{today_date_hdr}.pdf"
+
+            preview_storage_hdr = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'preview_storage')
+            image_filename = expected_name_hdr
+            # If exact file not present (e.g., dedup suffix), try to find closest match
+            try:
+                if os.path.isdir(preview_storage_hdr):
+                    files_hdr = [fn for fn in os.listdir(preview_storage_hdr) if fn.lower().endswith(('.pdf', '.PDF'))]
+                    if expected_name_hdr not in files_hdr:
+                        candidates = [fn for fn in files_hdr if fn.startswith(expected_name_hdr[:-4])]
+                        if candidates:
+                            # Pick the first candidate deterministically (sorted)
+                            candidates.sort()
+                            image_filename = candidates[0]
+            except Exception:
+                pass
+        except Exception:
+            # Fallback to whatever may be present in input (kept blank if not provided)
+            image_filename = clean_str(r0.get("Image_Filename", ""))
 
         header_full = [
             "H",             # 1  Record Type
@@ -2503,7 +2755,6 @@ with open(out_txt_path, "w", newline="", encoding="utf-8") as f:
             comp_code   = "AA1"
             tax_code    = "NT"
             d_remarks   = clean_str(rx.get("Remarks", ""), 30)
-            image_fn    = clean_str(rx.get("Detail_Image_Filename", "")) or image_filename
             cost_center = clean_str(rx.get("Expense_Cost_Center", ""), 10)
 
             # === ITEM DESC LOGIC ===
@@ -2543,7 +2794,7 @@ with open(out_txt_path, "w", newline="", encoding="utf-8") as f:
                 "",             # 23 WO Site Equip Comp
                 "",             # 24 Service Contract
                 "",             # 25 Unit Bill
-                image_fn,       # 26 Image filename
+                "",             # 26 Image filename
                 "",             # 27 PM Work Order
                 "",             # 28 Cost Center
                 "", "", "", "", "", "", "",  # 29-36 Labor/T+M or reserved
@@ -2598,3 +2849,349 @@ with open(completion_flag_path, 'w') as f:
     f.write('complete')
 
 print("COMPLETE: Processing pipeline completed successfully!")
+
+# ============================================================================
+# FILE RENAMING FUNCTION - RENAME PREVIEW STORAGE FILES
+# ============================================================================
+def rename_preview_storage_files():
+    """
+    Rename files in preview_storage folder based on final_invoice_data.xlsx
+    Format: {invoice_number}_{today_date}.pdf (max 40 characters total)
+    """
+    import pandas as pd
+    from datetime import datetime
+    import shutil
+    
+    print("\n=== STARTING FILE RENAMING PROCESS ===")
+    
+    # Get today's date
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    print(f"Today's date: {today_date}")
+    
+    # Paths
+    excel_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'outputs', 'excel_files', 'final_invoice_data.xlsx')
+    preview_storage = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'preview_storage')
+    
+    # Check if files exist
+    if not os.path.exists(excel_file):
+        print(f"ERROR: Excel file not found: {excel_file}")
+        return False
+    
+    if not os.path.exists(preview_storage):
+        print(f"ERROR: Preview storage folder not found: {preview_storage}")
+        return False
+    
+    try:
+        # Read the Excel file
+        print(f"Reading Excel file: {excel_file}")
+        df = pd.read_excel(excel_file)
+        
+        # Check required columns
+        required_columns = ['file_name', 'Invoice_Number']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            print(f"ERROR: Missing required columns: {missing_columns}")
+            print(f"Available columns: {list(df.columns)}")
+            return False
+        
+        print(f"Found {len(df)} invoice records")
+        
+        # Get list of files in preview_storage
+        preview_files = [f for f in os.listdir(preview_storage) if f.lower().endswith(('.pdf', '.PDF'))]
+        print(f"Found {len(preview_files)} PDF files in preview_storage")
+        
+        renamed_count = 0
+        errors = []
+        
+        # Process each invoice record
+        for index, row in df.iterrows():
+            file_name = str(row['file_name']).strip()
+            invoice_number = str(row['Invoice_Number']).strip()
+            
+            # Skip if missing data
+            if not file_name or not invoice_number or file_name == 'nan' or invoice_number == 'nan':
+                continue
+            
+            # Find matching file in preview_storage (case-insensitive)
+            matching_file = None
+            for preview_file in preview_files:
+                # First try exact case-insensitive match
+                if preview_file.lower() == file_name.lower():
+                    matching_file = preview_file
+                    break
+                # If no exact match, try to find a close match
+                elif preview_file.lower().replace('_', '').replace('-', '') == file_name.lower().replace('_', '').replace('-', ''):
+                    matching_file = preview_file
+                    break
+            
+            if not matching_file:
+                print(f"WARNING: No matching file found for {file_name}")
+                continue
+            
+            # Create new filename
+            # Remove any invalid characters and ensure it's clean
+            clean_invoice_number = ''.join(c for c in invoice_number if c.isalnum() or c in '-_')
+            
+            # Create filename: {invoice_number}_{today_date}.pdf
+            new_filename = f"{clean_invoice_number}_{today_date}.pdf"
+            
+            # Ensure filename is under 40 characters
+            if len(new_filename) > 40:
+                # Truncate invoice number to fit
+                max_invoice_length = 40 - len(today_date) - 6  # 6 for "_" and ".pdf"
+                clean_invoice_number = clean_invoice_number[:max_invoice_length]
+                new_filename = f"{clean_invoice_number}_{today_date}.pdf"
+                print(f"WARNING: Invoice number truncated to fit 40 character limit: {new_filename}")
+            
+            # Rename the file
+            old_file_path = os.path.join(preview_storage, matching_file)
+            new_file_path = os.path.join(preview_storage, new_filename)
+            
+            try:
+                if os.path.exists(new_file_path):
+                    # If file with same name exists, add a counter
+                    counter = 1
+                    while os.path.exists(new_file_path):
+                        name_without_ext = new_filename[:-4]
+                        new_filename = f"{name_without_ext}_{counter}.pdf"
+                        new_file_path = os.path.join(preview_storage, new_filename)
+                        counter += 1
+                
+                os.rename(old_file_path, new_file_path)
+                print(f"✅ Renamed: {matching_file} → {new_filename}")
+                renamed_count += 1
+
+                # After renaming, also copy the file to Testing\Invoices at project root
+                try:
+                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+                    testing_invoices_dir = os.path.join(project_root, 'Testing', 'Invoices')
+                    os.makedirs(testing_invoices_dir, exist_ok=True)
+
+                    # Destination path (handle collisions by appending a counter)
+                    copy_dest_path = os.path.join(testing_invoices_dir, new_filename)
+                    if os.path.exists(copy_dest_path):
+                        counter_copy = 1
+                        base_name_no_ext = new_filename[:-4]
+                        while os.path.exists(copy_dest_path):
+                            copy_dest_path = os.path.join(testing_invoices_dir, f"{base_name_no_ext}_{counter_copy}.pdf")
+                            counter_copy += 1
+
+                    shutil.copy2(new_file_path, copy_dest_path)
+                    print(f"📄 Copied to Testing\\Invoices: {os.path.basename(copy_dest_path)}")
+                except Exception as e:
+                    print(f"WARNING: Failed to copy to Testing\\Invoices: {e}")
+                
+            except Exception as e:
+                error_msg = f"Error renaming {matching_file}: {e}"
+                print(f"❌ {error_msg}")
+                errors.append(error_msg)
+        
+        print(f"\n=== FILE RENAMING COMPLETED ===")
+        print(f"Successfully renamed: {renamed_count} files")
+        if errors:
+            print(f"Errors encountered: {len(errors)}")
+            for error in errors:
+                print(f"  - {error}")
+                    
+    except Exception as e:
+        print(f"❌ FILE RENAMING FAILED: {e}")
+
+print("File renaming process completed. Now generating output files with correct filenames...")
+
+
+# ============================================================================
+# NETWORK STORAGE FUNCTION - SAVE FILES TO NETWORK LOCATION
+# ============================================================================
+def save_invoices_to_network():
+    """
+    Save processed invoice files to network location based on vendor codes
+    Network path: \\192.168.1.130\Accounting\Accounts Payable\JOB UPLOADED\{VendorFolder}
+    """
+    import pandas as pd
+    from datetime import datetime
+    import shutil
+    
+    print("\n=== STARTING NETWORK STORAGE PROCESS ===")
+    
+    # Get today's date
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    print(f"Today's date: {today_date}")
+    
+    # Paths
+    excel_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'outputs', 'excel_files', 'final_invoice_data.xlsx')
+    vendor_mapping_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'Vendor Folder Mapping.xlsx')
+    preview_storage = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'preview_storage')
+    
+    # Check if files exist
+    if not os.path.exists(excel_file):
+        print(f"ERROR: Excel file not found: {excel_file}")
+        return False
+    
+    if not os.path.exists(vendor_mapping_file):
+        print(f"ERROR: Vendor mapping file not found: {vendor_mapping_file}")
+        return False
+    
+    if not os.path.exists(preview_storage):
+        print(f"ERROR: Preview storage folder not found: {preview_storage}")
+        return False
+    
+    try:
+        # Read the vendor mapping file
+        print(f"Reading vendor mapping file: {vendor_mapping_file}")
+        vendor_df = pd.read_excel(vendor_mapping_file)
+        print(f"Found {len(vendor_df)} vendor mappings")
+        
+        # Read the invoice data file
+        print(f"Reading invoice data file: {excel_file}")
+        invoice_df = pd.read_excel(excel_file)
+        print(f"Found {len(invoice_df)} invoice records")
+        
+        # Check required columns in vendor mapping (lowercase in mapping file)
+        vendor_required_columns = ['vendor_code', 'folder_name']
+        vendor_missing_columns = [col for col in vendor_required_columns if col not in vendor_df.columns]
+        if vendor_missing_columns:
+            print(f"ERROR: Missing required columns in vendor mapping: {vendor_missing_columns}")
+            print(f"Available columns: {list(vendor_df.columns)}")
+            return False
+        
+        # Check required columns in invoice data
+        invoice_required_columns = ['file_name', 'Invoice_Number', 'Vendor_Code']
+        invoice_missing_columns = [col for col in invoice_required_columns if col not in invoice_df.columns]
+        if invoice_missing_columns:
+            print(f"ERROR: Missing required columns in invoice data: {invoice_missing_columns}")
+            print(f"Available columns: {list(invoice_df.columns)}")
+            return False
+        
+        # Create vendor code to folder mapping
+        vendor_mapping = {}
+        for index, row in vendor_df.iterrows():
+            vendor_code = str(row['vendor_code']).strip()
+            folder_name = str(row['folder_name']).strip()
+            if vendor_code and folder_name and vendor_code != 'nan' and folder_name != 'nan':
+                vendor_mapping[vendor_code] = folder_name
+        
+        print(f"Created mapping for {len(vendor_mapping)} vendors")
+        
+        # Get network path
+        try:
+            from network_config import get_accounting_network_path
+            network_base_path = get_accounting_network_path()
+            print(f"Network base path: {network_base_path}")
+        except ImportError:
+            print("WARNING: Could not import network_config, using default path")
+            network_base_path = "\\\\192.168.1.130\\Accounting\\Accounts Payable\\JOB UPLOADED\\"
+        
+        # Get list of files in preview_storage
+        preview_files = [f for f in os.listdir(preview_storage) if f.lower().endswith(('.pdf', '.PDF'))]
+        print(f"Found {len(preview_files)} PDF files in preview_storage")
+        
+        saved_count = 0
+        errors = []
+        
+        # Process each invoice record
+        for index, row in invoice_df.iterrows():
+            file_name = str(row['file_name']).strip()
+            invoice_number = str(row['Invoice_Number']).strip()
+            vendor_code = str(row['Vendor_Code']).strip()
+            
+            # Skip if missing data
+            if not file_name or not invoice_number or not vendor_code or \
+               file_name == 'nan' or invoice_number == 'nan' or vendor_code == 'nan':
+                continue
+            
+            # Attempt to find the file to copy. Since files may have been renamed already,
+            # first look for the renamed filename pattern, then fall back to the original.
+            matching_file = None
+
+            # Build expected renamed filename using same rules as the renamer
+            clean_invoice_number = ''.join(c for c in invoice_number if c.isalnum() or c in '-_')
+            expected_filename = f"{clean_invoice_number}_{today_date}.pdf"
+            if len(expected_filename) > 40:
+                max_invoice_length = 40 - len(today_date) - 6  # 6 for "_" and ".pdf"
+                clean_invoice_number = clean_invoice_number[:max_invoice_length]
+                expected_filename = f"{clean_invoice_number}_{today_date}.pdf"
+
+            # First try to find the renamed file using the expected format
+            expected_path = os.path.join(preview_storage, expected_filename)
+            if os.path.exists(expected_path):
+                matching_file = expected_filename
+            else:
+                # Fallback: try to locate using the original file_name from Excel
+                # Try case-insensitive match first
+                for preview_file in preview_files:
+                    if preview_file.lower() == file_name.lower():
+                        matching_file = preview_file
+                        break
+                
+                # If no exact case-insensitive match, try partial match
+                if not matching_file:
+                    for preview_file in preview_files:
+                        if file_name.lower() in preview_file.lower() or preview_file.lower() in file_name.lower():
+                            matching_file = preview_file
+                            break
+            
+            if not matching_file:
+                print(f"WARNING: No matching file found for {file_name}")
+                continue
+            
+            # Get vendor folder name
+            if vendor_code not in vendor_mapping:
+                print(f"WARNING: No folder mapping found for vendor code: {vendor_code}")
+                continue
+            
+            vendor_folder = vendor_mapping[vendor_code]
+            
+            # Create network destination path
+            network_dest_folder = os.path.join(network_base_path, vendor_folder)
+            network_dest_file = os.path.join(network_dest_folder, f"{clean_invoice_number}_{today_date}.pdf")
+            
+            # Ensure filename is under 40 characters (already truncated above if needed)
+            if len(os.path.basename(network_dest_file)) > 40:
+                print(f"WARNING: Truncated to fit 40 char limit: {os.path.basename(network_dest_file)}")
+            
+            try:
+                # Create vendor folder if it doesn't exist
+                os.makedirs(network_dest_folder, exist_ok=True)
+                
+                # Copy file to network location
+                source_file = os.path.join(preview_storage, matching_file)
+                shutil.copy2(source_file, network_dest_file)
+                
+                print(f"✅ Saved to network: {matching_file} → {vendor_folder}/{os.path.basename(network_dest_file)}")
+                saved_count += 1
+                
+            except Exception as e:
+                error_msg = f"Error saving {matching_file} to network: {e}"
+                print(f"❌ {error_msg}")
+                errors.append(error_msg)
+        
+        print(f"\n=== NETWORK STORAGE COMPLETED ===")
+        print(f"Successfully saved to network: {saved_count} files")
+        if errors:
+            print(f"Errors encountered: {len(errors)}")
+            for error in errors:
+                print(f"  - {error}")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ NETWORK STORAGE FAILED: {e}")
+        return False
+
+# ============================================================================
+# MAIN EXECUTION - CALL NETWORK STORAGE FUNCTION
+# ============================================================================
+print("COMPLETE: Processing pipeline completed successfully!")
+
+# Execute network storage
+print("\n" + "="*60)
+print("EXECUTING NETWORK STORAGE PROCESS")
+print("="*60)
+network_success = save_invoices_to_network()
+
+# Final summary
+print("\n" + "="*60)
+print("FINAL EXECUTION SUMMARY")
+print("="*60)
+print(f"Network Storage: {'✅ SUCCESS' if network_success else '❌ FAILED'}")
+print("="*60)
